@@ -1,0 +1,128 @@
+rules:
+  - rule_id: compositional_caveat
+    topic: composition
+    severity: info
+    trigger: always
+    recommendation: Treat abundance differences as compositional signals unless absolute abundance information is available.
+    caveat: Relative abundance does not directly measure absolute biomass.
+    evidence:
+      - Gloor et al. 2017
+      - Quinn et al. 2019
+      - Lutz et al. 2022
+
+  - rule_id: relative_input
+    topic: input
+    severity: warning
+    trigger: rows sum approximately to 1 or 100
+    recommendation: Do not feed relative or transformed abundance tables into methods that expect raw counts; keep labels explicit.
+    caveat: Relative tables can be valid for visualization, but not for every downstream statistical method.
+    evidence:
+      - Gloor et al. 2017
+      - Quinn et al. 2019
+      - ANCOM-BC2 2024
+      - ALDEx2 2014
+
+  - rule_id: non_integer_input
+    topic: input
+    severity: warning
+    trigger: values are not integer-like
+    recommendation: Verify whether the table is transformed or normalized before running count-based DA methods such as ANCOM-BC2 or ALDEx2.
+    caveat: Non-integer values may be appropriate for plots or ordination, but count models rely on count-scale assumptions.
+    evidence:
+      - Quinn et al. 2019
+      - ANCOM-BC2 2024
+      - ALDEx2 2014
+
+  - rule_id: high_sparsity
+    topic: sparsity
+    severity: warning
+    trigger: zero fraction >= 70% or low-prevalence feature fraction >= 50%
+    recommendation: Compare Bray-Curtis or Jaccard views with log-ratio-aware approaches such as rCLR or robust Aitchison ordination.
+    caveat: CLR with pseudocounts can be sensitive when zeros dominate; use sensitivity analysis.
+    evidence:
+      - Martino et al. 2019
+      - Quinn et al. 2019
+      - Zhang et al. 2024
+      - Chan et al. 2024
+
+  - rule_id: library_size_imbalance
+    topic: sequencing_depth
+    severity: warning
+    trigger: max positive library size / min positive library size >= 10
+    recommendation: Inspect rarefaction curves and run sensitivity checks before strong alpha or beta diversity interpretation.
+    caveat: Rarefaction can help diagnose uneven depth, but rarefied counts should not be the default input for all analyses.
+    evidence:
+      - Willis 2019
+      - McMurdie and Holmes 2014
+      - Schloss 2023
+      - Lin and Peddada 2020
+
+  - rule_id: high_taxa_sample_ratio
+    topic: dimensionality
+    severity: info
+    trigger: features / samples >= 10
+    recommendation: Prefer exploratory summaries and feature filtering before high-dimensional testing.
+    caveat: Filtering changes the estimand; report thresholds and keep raw data available.
+    evidence:
+      - Lutz et al. 2022
+      - Zhou et al. 2023
+
+  - rule_id: low_group_n
+    topic: group_design
+    severity: warning
+    trigger: minimum group size < 5
+    recommendation: Treat DA and group comparisons as exploratory when any group has a very small sample size.
+    caveat: Low n reduces power and stability; avoid strong biological conclusions from single-method hits.
+    evidence:
+      - Nearing et al. 2022
+      - Weiss et al. 2017
+
+  - rule_id: metadata_missingness
+    topic: metadata
+    severity: warning
+    trigger: any metadata column has missing values
+    recommendation: Resolve missing values in design-critical metadata columns before model-based analysis.
+    caveat: Missing metadata can silently change sample inclusion in models.
+    evidence:
+      - Mirzayi et al. 2021
+      - Zhou et al. 2023
+
+  - rule_id: taxonomy_missingness
+    topic: taxonomy
+    severity: warning
+    trigger: any taxonomy rank has >= 30% missing or unclassified values
+    recommendation: Report missing taxonomy by rank and be cautious with rank-level claims when annotation is incomplete.
+    caveat: Poor annotation can make genus-level or species-level claims unstable.
+    evidence:
+      - Zhou et al. 2023
+      - McMurdie and Holmes 2013
+
+  - rule_id: permanova_dispersion
+    topic: beta_diversity
+    severity: info
+    trigger: group variable supplied
+    recommendation: If PERMANOVA is used, pair it with dispersion diagnostics such as betadisper.
+    caveat: Distance-based tests can mix location and dispersion effects.
+    evidence:
+      - Anderson 2006
+      - Warton et al. 2012
+
+  - rule_id: da_method_concordance
+    topic: differential_abundance
+    severity: info
+    trigger: group variable supplied
+    recommendation: Compare ANCOM-BC2 and ALDEx2 results and emphasize taxa supported by multiple methods.
+    caveat: DA methods can disagree substantially across realistic microbiome datasets.
+    evidence:
+      - Nearing et al. 2022
+      - Calgaro et al. 2023
+
+  - rule_id: covariate_modeling
+    topic: differential_abundance
+    severity: info
+    trigger: group variable plus additional metadata columns supplied
+    recommendation: When covariates such as batch, host, site, or time are present, prefer adjusted models over simple two-group tests.
+    caveat: Adjusted models require careful design checks and enough samples per model term.
+    evidence:
+      - ANCOM-BC2 2024
+      - Weiss et al. 2017

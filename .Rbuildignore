@@ -1,0 +1,3 @@
+^\\.\\.Rcheck$
+^.*\\.Rcheck$
+^microeda_.*\\.tar\\.gz$

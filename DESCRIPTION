@@ -1,0 +1,25 @@
+Package: microeda
+Title: Evidence-Guided EDA for Microbiome Count Data
+Version: 0.0.0.9000
+Authors@R:
+    person("microeda", "authors", role = c("aut", "cre"),
+           email = "microeda@example.com")
+Author: microeda authors [aut, cre]
+Maintainer: microeda authors <microeda@example.com>
+Description: Provides a lightweight evidence-guided exploratory data
+    analysis layer for microbiome count tables. The package inspects count
+    tables, sample metadata, and taxonomy, then returns diagnostics and
+    method recommendations for compositional, sparse, high-dimensional
+    microbiome data.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Depends:
+    R (>= 4.1)
+Imports:
+    methods
+Suggests:
+    phyloseq,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0

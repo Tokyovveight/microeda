@@ -1,0 +1,41 @@
+\name{microeda_alpha_compare}
+\alias{microeda_alpha_compare}
+\title{Compare alpha diversity indices across groups}
+\usage{
+microeda_alpha_compare(
+  x,
+  metadata = NULL,
+  group = NULL,
+  taxa_are_rows = TRUE,
+  indices = c("observed", "chao1", "hill_q1", "hill_q2", "shannon",
+    "inverse_simpson", "pielou_evenness", "goods_coverage"),
+  p_adjust_method = "BH",
+  pairwise = TRUE
+)
+}
+\arguments{
+\item{x}{A \code{microeda_alpha} object, \code{phyloseq} object, matrix, or data frame.}
+\item{metadata}{Optional sample metadata when \code{x} is not a \code{microeda_alpha} object.}
+\item{group}{Grouping column. Optional when \code{x} is a \code{microeda_alpha} object that already contains a group column.}
+\item{taxa_are_rows}{For matrix/data frame inputs, whether rows are taxa.}
+\item{indices}{Alpha indices to compare.}
+\item{p_adjust_method}{P-value adjustment method passed to \code{p.adjust()}.}
+\item{pairwise}{Whether to run pairwise Wilcoxon tests.}
+}
+\value{
+A \code{microeda_alpha_compare} object.
+}
+\description{
+\code{microeda_alpha_compare()} runs exploratory group comparisons for alpha
+diversity indices. It uses Kruskal-Wallis tests as omnibus checks and, by
+default, pairwise Wilcoxon rank-sum tests with p-value correction.
+}
+\examples{
+counts <- matrix(c(10, 0, 0, 5, 20, 0, 1, 0, 0, 4, 0, 0), nrow = 3, byrow = TRUE)
+rownames(counts) <- c("S1", "S2", "S3")
+colnames(counts) <- paste0("ASV", 1:4)
+metadata <- data.frame(group = c("A", "A", "B"), row.names = rownames(counts))
+alpha <- microeda_alpha(counts, metadata = metadata, group = "group", taxa_are_rows = FALSE)
+comparison <- microeda_alpha_compare(alpha)
+as_alpha_tests(comparison)
+}
