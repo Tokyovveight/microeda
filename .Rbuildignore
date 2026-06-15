@@ -1,3 +1,6 @@
 ^\\.\\.Rcheck$
 ^.*\\.Rcheck$
 ^microeda_.*\\.tar\\.gz$
+^\.github$
+^AGENTS\.md$
+^ROADMAP\.md$
