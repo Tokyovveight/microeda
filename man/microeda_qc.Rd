@@ -59,6 +59,9 @@ observations derived from the compact summaries and QC flags.}
 \item{\code{metadata_completeness}}{One row per metadata column with
 \code{column}, \code{missing_fraction}, \code{n_unique}, \code{is_constant}, \code{is_group}.
 \code{NULL} when no metadata is supplied.}
+\item{\code{params}}{A named list of analysis parameters used to produce the
+QC object, including \code{min_prevalence} and \code{group}.}
+\item{\code{call}}{The matched function call.}
 }
 }
 \description{

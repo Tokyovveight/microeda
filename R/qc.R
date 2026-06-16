@@ -36,6 +36,9 @@
 #'     \item{`metadata_completeness`}{One row per metadata column with
 #'       `column`, `missing_fraction`, `n_unique`, `is_constant`, `is_group`.
 #'       `NULL` when no metadata is supplied.}
+#'     \item{`params`}{A named list of analysis parameters used to produce the
+#'       QC object, including `min_prevalence` and `group`.}
+#'     \item{`call`}{The matched function call.}
 #'   }
 #' @export
 microeda_qc <- function(x,

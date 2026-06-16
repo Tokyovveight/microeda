@@ -67,6 +67,32 @@ test_that("microeda_qc builds per-sample and per-feature tables from a matrix", 
   expect_equal(nrow(qc$qc_flags), 0)
 })
 
+test_that("microeda_qc records parameters and call", {
+  counts <- matrix(
+    c(1, 0, 2, 3),
+    nrow = 2,
+    dimnames = list(c("s1", "s2"), c("f1", "f2"))
+  )
+  metadata <- data.frame(
+    group = c("A", "B"),
+    row.names = c("s1", "s2")
+  )
+
+  qc <- microeda_qc(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE,
+    min_prevalence = 0.25
+  )
+
+  expect_true("params" %in% names(qc))
+  expect_equal(qc$params$group, "group")
+  expect_equal(qc$params$min_prevalence, 0.25)
+  expect_true("call" %in% names(qc))
+  expect_true(is.call(qc$call))
+})
+
 test_that("microeda_qc returns stable human-readable observations", {
   counts <- matrix(
     c(
