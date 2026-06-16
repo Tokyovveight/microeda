@@ -24,8 +24,11 @@
 #'     \item{`sparsity_summary`}{A named list with matrix-wide zero fraction,
 #'       zero-library samples, zero-abundance features, and median sample/feature
 #'       zero fractions.}
+#'     \item{`prevalence_summary`}{A named list with compact prevalence and
+#'       filtering diagnostics, including features above and below the
+#'       `min_prevalence` threshold.}
 #'     \item{`qc_flags`}{A data frame of conservative QC flags. Empty when no
-#'       simple library-size or sparsity flags are triggered.}
+#'       simple library-size, sparsity, or prevalence flags are triggered.}
 #'     \item{`per_rank`}{One row per taxonomy rank with `rank`, `n_assigned`,
 #'       `n_unique`, `missing_fraction`. `NULL` when no taxonomy is supplied.}
 #'     \item{`metadata_completeness`}{One row per metadata column with
@@ -51,7 +54,16 @@ microeda_qc <- function(x,
   per_feature <- .qc_per_feature(counts, min_prevalence = min_prevalence)
   library_size_summary <- .qc_library_size_summary(counts)
   sparsity_summary <- .qc_sparsity_summary(counts)
-  qc_flags <- .qc_flags(library_size_summary, sparsity_summary)
+  prevalence_summary <- .qc_prevalence_summary(
+    per_feature = per_feature,
+    min_prevalence = min_prevalence,
+    n_samples = nrow(counts)
+  )
+  qc_flags <- .qc_flags(
+    library_size_summary,
+    sparsity_summary,
+    prevalence_summary
+  )
   per_rank <- .qc_per_rank(extracted$taxonomy)
   meta_complete <- .qc_metadata_completeness(extracted$metadata, group = group)
 
@@ -61,6 +73,7 @@ microeda_qc <- function(x,
       per_feature = per_feature,
       library_size_summary = library_size_summary,
       sparsity_summary = sparsity_summary,
+      prevalence_summary = prevalence_summary,
       qc_flags = qc_flags,
       per_rank = per_rank,
       metadata_completeness = meta_complete,
@@ -71,6 +84,45 @@ microeda_qc <- function(x,
       call = match.call()
     ),
     class = "microeda_qc"
+  )
+}
+
+.qc_prevalence_summary <- function(per_feature, min_prevalence, n_samples) {
+  prevalence <- per_feature$prevalence
+  n_features <- nrow(per_feature)
+  above_threshold <- per_feature$above_prevalence_threshold
+  n_features_above_threshold <- sum(above_threshold)
+  n_features_below_threshold <- sum(!above_threshold)
+  detected_in_one_sample <- per_feature$n_samples_detected == 1
+
+  list(
+    n_features = n_features,
+    n_samples = n_samples,
+    min_prevalence_threshold = min_prevalence,
+    n_features_above_threshold = unname(n_features_above_threshold),
+    n_features_below_threshold = unname(n_features_below_threshold),
+    fraction_features_above_threshold = .qc_safe_ratio(
+      n_features_above_threshold,
+      n_features
+    ),
+    fraction_features_below_threshold = .qc_safe_ratio(
+      n_features_below_threshold,
+      n_features
+    ),
+    min_prevalence = unname(min(prevalence)),
+    q1_prevalence = unname(stats::quantile(prevalence, 0.25, names = FALSE)),
+    median_prevalence = unname(stats::median(prevalence)),
+    mean_prevalence = unname(mean(prevalence)),
+    q3_prevalence = unname(stats::quantile(prevalence, 0.75, names = FALSE)),
+    max_prevalence = unname(max(prevalence)),
+    n_features_detected_in_all_samples = unname(sum(
+      per_feature$n_samples_detected == n_samples
+    )),
+    n_features_detected_in_one_sample = unname(sum(detected_in_one_sample)),
+    fraction_features_detected_in_one_sample = .qc_safe_ratio(
+      sum(detected_in_one_sample),
+      n_features
+    )
   )
 }
 
@@ -122,7 +174,9 @@ microeda_qc <- function(x,
   )
 }
 
-.qc_flags <- function(library_size_summary, sparsity_summary) {
+.qc_flags <- function(library_size_summary,
+                      sparsity_summary,
+                      prevalence_summary) {
   flags <- list()
 
   if (library_size_summary$zero_library_samples > 0) {
@@ -161,6 +215,26 @@ microeda_qc <- function(x,
       flag_id = "high_sparsity",
       severity = "warning",
       message = "At least 70% of count matrix entries are zero."
+    )
+  }
+
+  if (prevalence_summary$fraction_features_below_threshold >= 0.5) {
+    flags[[length(flags) + 1]] <- .qc_flag(
+      flag_id = "many_features_below_prevalence",
+      severity = "warning",
+      message = paste0(
+        "At least 50% of features are below the min_prevalence threshold (",
+        prevalence_summary$min_prevalence_threshold,
+        ")."
+      )
+    )
+  }
+
+  if (prevalence_summary$fraction_features_detected_in_one_sample >= 0.3) {
+    flags[[length(flags) + 1]] <- .qc_flag(
+      flag_id = "many_single_sample_features",
+      severity = "warning",
+      message = "At least 30% of features are detected in only one sample."
     )
   }
 

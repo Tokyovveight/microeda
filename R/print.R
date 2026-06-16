@@ -264,6 +264,32 @@ print.microeda_qc <- function(x, ...) {
     ")\n",
     sep = ""
   )
+  cat(
+    "Prevalence >= ",
+    format_number(x$prevalence_summary$min_prevalence_threshold),
+    ": ",
+    x$prevalence_summary$n_features_above_threshold,
+    " features (",
+    format_percent(x$prevalence_summary$fraction_features_above_threshold),
+    ")\n",
+    sep = ""
+  )
+  cat(
+    "One-sample taxa:   ",
+    x$prevalence_summary$n_features_detected_in_one_sample,
+    " (",
+    format_percent(
+      x$prevalence_summary$fraction_features_detected_in_one_sample
+    ),
+    ")\n",
+    sep = ""
+  )
+  cat(
+    "Median prevalence: ",
+    format_percent(x$prevalence_summary$median_prevalence),
+    "\n",
+    sep = ""
+  )
 
   if (!is.null(x$per_rank)) {
     cat("Per-rank:         ", nrow(x$per_rank), " ranks\n", sep = "")
@@ -289,7 +315,8 @@ print.microeda_qc <- function(x, ...) {
 
   cat(
     "\nUse x$per_sample, x$per_feature, x$library_size_summary, ",
-    "x$sparsity_summary, x$per_rank, x$metadata_completeness.\n",
+    "x$sparsity_summary, x$prevalence_summary, x$per_rank, ",
+    "x$metadata_completeness.\n",
     sep = ""
   )
   invisible(x)

@@ -32,7 +32,8 @@ test_that("microeda_qc builds per-sample and per-feature tables from a matrix", 
   expect_equal(qc$per_sample$n_features_detected, c(2, 2, 1, 3))
   expect_equal(qc$per_feature$total_reads, c(32, 7, 1, 6))
   expect_true(all(c(
-    "library_size_summary", "sparsity_summary", "qc_flags"
+    "library_size_summary", "sparsity_summary", "prevalence_summary",
+    "qc_flags"
   ) %in% names(qc)))
   expect_equal(qc$library_size_summary$n_samples, 4)
   expect_equal(qc$library_size_summary$total_reads, 46)
@@ -46,6 +47,23 @@ test_that("microeda_qc builds per-sample and per-feature tables from a matrix", 
   expect_equal(qc$sparsity_summary$zero_abundance_features, 0)
   expect_equal(qc$sparsity_summary$median_sample_zero_fraction, 0.5)
   expect_equal(qc$sparsity_summary$median_feature_zero_fraction, 0.5)
+  expect_equal(qc$prevalence_summary$n_features, 4)
+  expect_equal(qc$prevalence_summary$n_samples, 4)
+  expect_equal(qc$prevalence_summary$min_prevalence_threshold, 0.05)
+  expect_equal(qc$prevalence_summary$n_features_above_threshold, 4)
+  expect_equal(qc$prevalence_summary$n_features_below_threshold, 0)
+  expect_equal(qc$prevalence_summary$fraction_features_above_threshold, 1)
+  expect_equal(qc$prevalence_summary$fraction_features_below_threshold, 0)
+  expect_equal(qc$prevalence_summary$min_prevalence, 0.25)
+  expect_equal(qc$prevalence_summary$median_prevalence, 0.5)
+  expect_equal(qc$prevalence_summary$mean_prevalence, 0.5)
+  expect_equal(qc$prevalence_summary$max_prevalence, 0.75)
+  expect_equal(qc$prevalence_summary$n_features_detected_in_all_samples, 0)
+  expect_equal(qc$prevalence_summary$n_features_detected_in_one_sample, 1)
+  expect_equal(
+    qc$prevalence_summary$fraction_features_detected_in_one_sample,
+    0.25
+  )
   expect_equal(nrow(qc$qc_flags), 0)
 })
 
@@ -84,6 +102,9 @@ test_that("microeda_qc flags zero-abundance features", {
 
   expect_equal(qc$sparsity_summary$zero_abundance_features, 1)
   expect_equal(qc$sparsity_summary$zero_abundance_feature_fraction, 0.25)
+  expect_equal(qc$prevalence_summary$n_features_above_threshold, 3)
+  expect_equal(qc$prevalence_summary$n_features_below_threshold, 1)
+  expect_equal(qc$prevalence_summary$fraction_features_below_threshold, 0.25)
   expect_true("zero_abundance_features" %in% qc$qc_flags$flag_id)
 })
 
@@ -109,7 +130,19 @@ test_that("microeda_qc handles all-zero libraries without Inf or NaN ratios", {
   expect_false(any(is.nan(ratios)))
   expect_equal(qc$sparsity_summary$overall_zero_fraction, 1)
   expect_equal(qc$sparsity_summary$zero_abundance_features, 2)
+  expect_equal(qc$prevalence_summary$n_features_above_threshold, 0)
+  expect_equal(qc$prevalence_summary$n_features_below_threshold, 2)
+  expect_equal(qc$prevalence_summary$min_prevalence, 0)
+  expect_equal(qc$prevalence_summary$median_prevalence, 0)
+  expect_equal(qc$prevalence_summary$max_prevalence, 0)
+  expect_equal(qc$prevalence_summary$n_features_detected_in_all_samples, 0)
+  expect_equal(qc$prevalence_summary$n_features_detected_in_one_sample, 0)
+  expect_equal(
+    qc$prevalence_summary$fraction_features_detected_in_one_sample,
+    0
+  )
   expect_true("high_sparsity" %in% qc$qc_flags$flag_id)
+  expect_true("many_features_below_prevalence" %in% qc$qc_flags$flag_id)
 })
 
 test_that("microeda_qc returns NULL for missing taxonomy and metadata", {
@@ -224,6 +257,41 @@ test_that("microeda_qc applies the min_prevalence threshold", {
 
   expect_equal(qc$per_feature$above_prevalence_threshold, c(TRUE, FALSE, FALSE, FALSE))
   expect_equal(qc$per_sample$n_features_above_prevalence, c(1, 1, 1, 1))
+  expect_equal(qc$prevalence_summary$min_prevalence_threshold, 0.5)
+  expect_equal(qc$prevalence_summary$n_features_above_threshold, 1)
+  expect_equal(qc$prevalence_summary$n_features_below_threshold, 3)
+  expect_equal(qc$prevalence_summary$fraction_features_above_threshold, 0.25)
+  expect_equal(qc$prevalence_summary$fraction_features_below_threshold, 0.75)
+  expect_true("many_features_below_prevalence" %in% qc$qc_flags$flag_id)
+  expect_true("many_single_sample_features" %in% qc$qc_flags$flag_id)
+})
+
+test_that("microeda_qc summarizes prevalence edge cases", {
+  counts <- matrix(
+    c(
+      1, 0, 5,
+      1, 0, 0,
+      1, 0, 0,
+      1, 2, 0
+    ),
+    nrow = 4,
+    byrow = TRUE,
+    dimnames = list(paste0("s", 1:4), paste0("f", 1:3))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE, min_prevalence = 0.5)
+
+  expect_equal(qc$per_feature$prevalence, c(1, 0.25, 0.25))
+  expect_equal(qc$prevalence_summary$n_features_detected_in_all_samples, 1)
+  expect_equal(qc$prevalence_summary$n_features_detected_in_one_sample, 2)
+  expect_equal(
+    qc$prevalence_summary$fraction_features_detected_in_one_sample,
+    2 / 3
+  )
+  expect_equal(qc$prevalence_summary$q1_prevalence, 0.25)
+  expect_equal(qc$prevalence_summary$median_prevalence, 0.25)
+  expect_equal(qc$prevalence_summary$q3_prevalence, 0.625)
+  expect_true("many_single_sample_features" %in% qc$qc_flags$flag_id)
 })
 
 test_that("microeda_qc validates min_prevalence", {
