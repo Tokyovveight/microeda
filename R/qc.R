@@ -101,6 +101,125 @@ microeda_qc <- function(x,
   )
 }
 
+#' Build a compact QC summary table
+#'
+#' `as_qc_summary()` formats selected `microeda_qc()` diagnostics into a compact
+#' data frame for examples, simple reports, and downstream display.
+#'
+#' @param x A `microeda_qc` object.
+#' @param include_observations Whether to append rows derived from
+#'   `x$qc_observations`.
+#'
+#' @return A data frame with columns `section`, `metric`, `value`, and
+#'   `message`.
+#' @export
+as_qc_summary <- function(x, include_observations = TRUE) {
+  if (!inherits(x, "microeda_qc")) {
+    stop("`x` must be a microeda_qc object.", call. = FALSE)
+  }
+
+  if (!is.logical(include_observations) || length(include_observations) != 1 ||
+      is.na(include_observations)) {
+    stop("`include_observations` must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  out <- rbind(
+    .qc_summary_row(
+      "input", "n_samples", x$library_size_summary$n_samples,
+      "Number of samples."
+    ),
+    .qc_summary_row(
+      "input", "n_features", x$prevalence_summary$n_features,
+      "Number of features."
+    ),
+    .qc_summary_row(
+      "library_size", "total_reads", x$library_size_summary$total_reads,
+      "Total reads across all samples."
+    ),
+    .qc_summary_row(
+      "library_size", "median_library_size", x$library_size_summary$median,
+      "Median sample library size."
+    ),
+    .qc_summary_row(
+      "library_size", "zero_library_samples",
+      x$library_size_summary$zero_library_samples,
+      "Samples with zero total counts."
+    ),
+    .qc_summary_row(
+      "sparsity", "overall_zero_fraction",
+      x$sparsity_summary$overall_zero_fraction,
+      "Fraction of count matrix entries equal to zero."
+    ),
+    .qc_summary_row(
+      "sparsity", "zero_abundance_features",
+      x$sparsity_summary$zero_abundance_features,
+      "Features with zero total abundance."
+    ),
+    .qc_summary_row(
+      "prevalence", "features_above_min_prevalence",
+      x$prevalence_summary$n_features_above_threshold,
+      "Features at or above the min_prevalence threshold."
+    ),
+    .qc_summary_row(
+      "prevalence", "features_below_min_prevalence",
+      x$prevalence_summary$n_features_below_threshold,
+      "Features below the min_prevalence threshold."
+    ),
+    .qc_summary_row(
+      "prevalence", "features_detected_in_one_sample",
+      x$prevalence_summary$n_features_detected_in_one_sample,
+      "Features detected in only one sample."
+    ),
+    .qc_summary_row(
+      "flags", "n_qc_flags", nrow(x$qc_flags),
+      "Number of QC flags."
+    ),
+    .qc_summary_row(
+      "observations", "n_warning_observations",
+      sum(x$qc_observations$severity == "warning"),
+      "Number of warning observations."
+    )
+  )
+
+  if (isTRUE(include_observations)) {
+    out <- rbind(out, .qc_observation_summary_rows(x$qc_observations))
+  }
+
+  rownames(out) <- NULL
+  out
+}
+
+.qc_summary_row <- function(section, metric, value, message) {
+  data.frame(
+    section = section,
+    metric = metric,
+    value = as.character(value),
+    message = message,
+    stringsAsFactors = FALSE
+  )
+}
+
+.qc_observation_summary_rows <- function(observations) {
+  if (nrow(observations) == 0) {
+    return(data.frame(
+      section = character(),
+      metric = character(),
+      value = character(),
+      message = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  data.frame(
+    section = paste0("observation_", observations$category),
+    metric = observations$observation_id,
+    value = observations$severity,
+    message = observations$message,
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}
+
 .qc_observations <- function(library_size_summary,
                              sparsity_summary,
                              prevalence_summary,

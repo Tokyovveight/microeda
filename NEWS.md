@@ -5,3 +5,4 @@
 * Added compact library-size and sparsity diagnostics to `microeda_qc()`.
 * Added compact prevalence and filtering diagnostics to `microeda_qc()`.
 * Added human-readable QC observations to `microeda_qc()`.
+* Added `as_qc_summary()` for compact QC display tables.

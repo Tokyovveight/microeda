@@ -93,6 +93,77 @@ test_that("microeda_qc records parameters and call", {
   expect_true(is.call(qc$call))
 })
 
+test_that("as_qc_summary returns compact core metrics", {
+  counts <- matrix(
+    c(
+      10, 0, 0,
+      0, 5, 1
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2", "f3"))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  summary <- as_qc_summary(qc, include_observations = FALSE)
+
+  expect_s3_class(summary, "data.frame")
+  expect_named(summary, c("section", "metric", "value", "message"))
+  expect_true(all(c(
+    "n_samples",
+    "n_features",
+    "total_reads",
+    "median_library_size",
+    "zero_library_samples",
+    "overall_zero_fraction",
+    "zero_abundance_features",
+    "features_above_min_prevalence",
+    "features_below_min_prevalence",
+    "features_detected_in_one_sample",
+    "n_qc_flags",
+    "n_warning_observations"
+  ) %in% summary$metric))
+  expect_equal(summary$value[summary$metric == "n_samples"], "2")
+  expect_equal(summary$value[summary$metric == "n_features"], "3")
+  expect_equal(summary$value[summary$metric == "total_reads"], "16")
+  expect_false(any(grepl("^observation_", summary$section)))
+})
+
+test_that("as_qc_summary can include observation rows", {
+  counts <- matrix(
+    c(
+      0, 0,
+      1, 0
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2"))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  with_observations <- as_qc_summary(qc)
+  without_observations <- as_qc_summary(qc, include_observations = FALSE)
+
+  expect_true(any(grepl("^observation_", with_observations$section)))
+  expect_true("flag_zero_library_samples" %in% with_observations$metric)
+  expect_true(nrow(with_observations) > nrow(without_observations))
+  expect_false(any(grepl("^observation_", without_observations$section)))
+})
+
+test_that("as_qc_summary validates inputs", {
+  expect_error(as_qc_summary(data.frame()), "microeda_qc")
+
+  counts <- matrix(
+    c(1, 2, 3, 4),
+    nrow = 2,
+    dimnames = list(c("s1", "s2"), c("f1", "f2"))
+  )
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+
+  expect_error(as_qc_summary(qc, include_observations = NA), "include_observations")
+  expect_error(as_qc_summary(qc, include_observations = c(TRUE, FALSE)), "include_observations")
+})
+
 test_that("microeda_qc returns stable human-readable observations", {
   counts <- matrix(
     c(
