@@ -4,6 +4,10 @@ microeda_extract <- function(x, metadata = NULL, taxonomy = NULL,
     return(extract_phyloseq(x))
   }
 
+  if (inherits(x, "otu_table")) {
+    return(extract_otu_table(x, metadata = metadata, taxonomy = taxonomy))
+  }
+
   counts <- orient_count_matrix(x, taxa_are_rows = taxa_are_rows)
   metadata <- normalize_metadata(metadata, sample_names = rownames(counts))
   taxonomy <- normalize_taxonomy(taxonomy, feature_names = colnames(counts))
@@ -24,11 +28,7 @@ extract_phyloseq <- function(x) {
   }
 
   otu <- phyloseq::otu_table(x)
-  counts <- as(otu, "matrix")
-
-  if (phyloseq::taxa_are_rows(otu)) {
-    counts <- t(counts)
-  }
+  counts <- orient_otu_table(otu)
 
   metadata <- NULL
   if (!is.null(phyloseq::sample_data(x, errorIfNULL = FALSE))) {
@@ -47,6 +47,35 @@ extract_phyloseq <- function(x) {
     metadata = metadata,
     taxonomy = taxonomy
   )
+}
+
+extract_otu_table <- function(x, metadata = NULL, taxonomy = NULL) {
+  if (!requireNamespace("phyloseq", quietly = TRUE)) {
+    stop(
+      "`phyloseq` otu_table input requires the phyloseq package to be installed.",
+      call. = FALSE
+    )
+  }
+
+  counts <- orient_otu_table(x)
+  metadata <- normalize_metadata(metadata, sample_names = rownames(counts))
+  taxonomy <- normalize_taxonomy(taxonomy, feature_names = colnames(counts))
+
+  list(
+    counts = counts,
+    metadata = metadata,
+    taxonomy = taxonomy
+  )
+}
+
+orient_otu_table <- function(x) {
+  counts <- as(x, "matrix")
+
+  if (phyloseq::taxa_are_rows(x)) {
+    counts <- t(counts)
+  }
+
+  counts
 }
 
 orient_count_matrix <- function(x, taxa_are_rows = TRUE) {

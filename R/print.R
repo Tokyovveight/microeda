@@ -220,3 +220,25 @@ format_p <- function(x) {
 
   format(round(x, 4), trim = TRUE, scientific = FALSE)
 }
+#' @export
+print.microeda_qc <- function(x, ...) {
+  cat("microeda qc summary\n")
+  cat("-------------------\n")
+  cat("Per-sample:       ", nrow(x$per_sample), " samples\n", sep = "")
+  cat("Per-feature:      ", nrow(x$per_feature), " features\n", sep = "")
+
+  if (!is.null(x$per_rank)) {
+    cat("Per-rank:         ", nrow(x$per_rank), " ranks\n", sep = "")
+  } else {
+    cat("Per-rank:         not provided\n")
+  }
+
+  if (!is.null(x$metadata_completeness)) {
+    cat("Metadata columns: ", nrow(x$metadata_completeness), "\n", sep = "")
+  } else {
+    cat("Metadata:         not provided\n")
+  }
+
+  cat("\nUse x$per_sample, x$per_feature, x$per_rank, x$metadata_completeness.\n")
+  invisible(x)
+}
