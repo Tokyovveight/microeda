@@ -58,6 +58,33 @@ report
 as_recommendations(report)
 ```
 
+## QC summary
+
+```r
+taxonomy <- data.frame(
+  Phylum = c("Firmicutes", "Firmicutes", "Bacteroidota", "Actinobacteriota"),
+  Genus = c("Lactobacillus", "Streptococcus", "Bacteroides", "Bifidobacterium"),
+  row.names = colnames(counts)
+)
+
+qc <- microeda_qc(
+  counts,
+  metadata = metadata,
+  taxonomy = taxonomy,
+  group = "group",
+  taxa_are_rows = FALSE
+)
+
+qc
+qc$per_sample
+qc$per_feature
+qc$per_rank
+qc$metadata_completeness
+```
+
+`microeda_qc()` returns structured diagnostics for samples, features,
+taxonomy ranks, and metadata completeness.
+
 ## Alpha diversity
 
 ```r
