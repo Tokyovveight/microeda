@@ -80,10 +80,14 @@ qc$per_sample
 qc$per_feature
 qc$per_rank
 qc$metadata_completeness
+as_qc_summary(qc)
+as_qc_summary(qc, include_observations = FALSE)
 ```
 
 `microeda_qc()` returns structured diagnostics for samples, features,
 taxonomy ranks, and metadata completeness.
+`as_qc_summary()` returns a compact data frame for reports, README-style
+summaries, or downstream display.
 
 ## Alpha diversity
 
