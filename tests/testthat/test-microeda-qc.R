@@ -164,6 +164,53 @@ test_that("as_qc_summary validates inputs", {
   expect_error(as_qc_summary(qc, include_observations = c(TRUE, FALSE)), "include_observations")
 })
 
+test_that("microeda_qc_report returns compact text for QC objects", {
+  counts <- matrix(
+    c(
+      10, 0, 0,
+      0, 5, 1
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2", "f3"))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  report <- microeda_qc_report(qc)
+
+  expect_type(report, "character")
+  expect_length(report, 1)
+  expect_match(report, "microeda QC report", fixed = TRUE)
+  expect_match(report, "Samples: 2", fixed = TRUE)
+  expect_match(report, "Features: 3", fixed = TRUE)
+  expect_match(report, "Total reads: 16", fixed = TRUE)
+  expect_match(report, "Sparsity:", fixed = TRUE)
+  expect_match(report, "QC observations:", fixed = TRUE)
+})
+
+test_that("microeda_qc_report handles zero-library edge cases", {
+  counts <- matrix(
+    c(
+      0, 0,
+      1, 0
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2"))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  report <- microeda_qc_report(qc)
+
+  expect_match(report, "Total reads: 1", fixed = TRUE)
+  expect_match(report, "zero-abundance feature", fixed = TRUE)
+  expect_match(report, "QC flags:", fixed = TRUE)
+})
+
+test_that("microeda_qc_report validates input", {
+  expect_error(microeda_qc_report(data.frame()), "microeda_qc")
+})
+
 test_that("microeda_qc returns stable human-readable observations", {
   counts <- matrix(
     c(

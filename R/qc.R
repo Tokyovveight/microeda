@@ -189,6 +189,59 @@ as_qc_summary <- function(x, include_observations = TRUE) {
   out
 }
 
+#' Build a compact text QC report
+#'
+#' `microeda_qc_report()` turns a `microeda_qc` object into a short
+#' newline-separated text report. This is a minimal text skeleton for future
+#' richer QC reports.
+#'
+#' @param x A `microeda_qc` object.
+#'
+#' @return A single character string.
+#' @examples
+#' counts <- matrix(
+#'   c(10, 0, 0, 5, 20, 0, 1, 0),
+#'   nrow = 2,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- c("S1", "S2")
+#' colnames(counts) <- paste0("ASV", 1:4)
+#'
+#' qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+#' microeda_qc_report(qc)
+#' @export
+microeda_qc_report <- function(x) {
+  if (!inherits(x, "microeda_qc")) {
+    stop("`x` must be a microeda_qc object.", call. = FALSE)
+  }
+
+  summary <- as_qc_summary(x, include_observations = FALSE)
+
+  metric_value <- function(metric) {
+    summary$value[match(metric, summary$metric)]
+  }
+
+  lines <- c(
+    "microeda QC report",
+    "-------------------",
+    paste0("Samples: ", metric_value("n_samples")),
+    paste0("Features: ", metric_value("n_features")),
+    paste0("Total reads: ", metric_value("total_reads")),
+    paste0("Median library size: ", metric_value("median_library_size")),
+    paste0(
+      "Sparsity: ",
+      .qc_format_percent(x$sparsity_summary$overall_zero_fraction),
+      " zeros overall; ",
+      x$sparsity_summary$zero_abundance_features,
+      " zero-abundance feature(s)."
+    ),
+    paste0("QC flags: ", nrow(x$qc_flags)),
+    paste0("QC observations: ", nrow(x$qc_observations))
+  )
+
+  paste(lines, collapse = "\n")
+}
+
 .qc_summary_row <- function(section, metric, value, message) {
   data.frame(
     section = section,
