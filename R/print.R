@@ -314,9 +314,18 @@ print.microeda_qc <- function(x, ...) {
   }
 
   cat(
+    "Observations: ",
+    nrow(x$qc_observations),
+    " (",
+    sum(x$qc_observations$severity == "warning"),
+    " warning)\n",
+    sep = ""
+  )
+
+  cat(
     "\nUse x$per_sample, x$per_feature, x$library_size_summary, ",
     "x$sparsity_summary, x$prevalence_summary, x$per_rank, ",
-    "x$metadata_completeness.\n",
+    "x$metadata_completeness, x$qc_observations.\n",
     sep = ""
   )
   invisible(x)

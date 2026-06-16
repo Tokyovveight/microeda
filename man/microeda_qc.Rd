@@ -52,6 +52,8 @@ filtering diagnostics, including features above and below the
 \code{min_prevalence} threshold.}
 \item{\code{qc_flags}}{A data frame of conservative QC flags. Empty when no
 simple library-size, sparsity, or prevalence flags are triggered.}
+\item{\code{qc_observations}}{A data frame of concise human-readable QC
+observations derived from the compact summaries and QC flags.}
 \item{\code{per_rank}}{One row per taxonomy rank with \code{rank}, \code{n_assigned},
 \code{n_unique}, \code{missing_fraction}. \code{NULL} when no taxonomy is supplied.}
 \item{\code{metadata_completeness}}{One row per metadata column with

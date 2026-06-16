@@ -67,6 +67,78 @@ test_that("microeda_qc builds per-sample and per-feature tables from a matrix", 
   expect_equal(nrow(qc$qc_flags), 0)
 })
 
+test_that("microeda_qc returns stable human-readable observations", {
+  counts <- matrix(
+    c(
+      1, 0,
+      0, 2
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2"))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+
+  expect_named(
+    qc$qc_observations,
+    c("observation_id", "category", "severity", "message")
+  )
+  expect_equal(
+    qc$qc_observations$observation_id[1:6],
+    c(
+      "input_dimensions",
+      "total_reads",
+      "overall_zero_fraction",
+      "features_above_prevalence",
+      "metadata_absent",
+      "taxonomy_absent"
+    )
+  )
+  expect_true(all(c("input", "library_size", "sparsity", "prevalence") %in%
+    qc$qc_observations$category))
+  expect_true(all(qc$qc_observations$severity %in% c("info", "warning")))
+  expect_equal(sum(duplicated(qc$qc_observations$observation_id)), 0)
+  expect_true(any(grepl(
+    "2 sample\\(s\\) and 2 feature\\(s\\)",
+    qc$qc_observations$message
+  )))
+  expect_true(any(grepl("Total reads across all samples: 3", qc$qc_observations$message)))
+  expect_true(any(grepl("Overall zero fraction: 50%", qc$qc_observations$message)))
+  expect_true(any(grepl("Metadata table is absent", qc$qc_observations$message)))
+  expect_true(any(grepl("Taxonomy table is absent", qc$qc_observations$message)))
+})
+
+test_that("microeda_qc observations summarize metadata and taxonomy presence", {
+  counts <- matrix(
+    c(1, 2, 3, 4),
+    nrow = 2,
+    dimnames = list(c("s1", "s2"), c("f1", "f2"))
+  )
+  metadata <- data.frame(
+    group = c("A", "B"),
+    batch = c("x", "y"),
+    row.names = c("s1", "s2")
+  )
+  taxonomy <- data.frame(
+    Phylum = c("Firmicutes", "Bacteroidota"),
+    Genus = c("Faecalibacterium", "Bacteroides"),
+    row.names = c("f1", "f2")
+  )
+
+  qc <- microeda_qc(
+    counts,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    taxa_are_rows = FALSE
+  )
+
+  expect_true("metadata_columns" %in% qc$qc_observations$observation_id)
+  expect_true("taxonomy_ranks" %in% qc$qc_observations$observation_id)
+  expect_false("metadata_absent" %in% qc$qc_observations$observation_id)
+  expect_false("taxonomy_absent" %in% qc$qc_observations$observation_id)
+})
+
 test_that("microeda_qc flags zero-library samples", {
   counts <- matrix(
     c(
@@ -85,6 +157,13 @@ test_that("microeda_qc flags zero-library samples", {
   expect_equal(qc$sparsity_summary$zero_library_samples, 1)
   expect_equal(qc$sparsity_summary$zero_library_sample_fraction, 1 / 3)
   expect_true("zero_library_samples" %in% qc$qc_flags$flag_id)
+  expect_true("flag_zero_library_samples" %in% qc$qc_observations$observation_id)
+  expect_equal(
+    qc$qc_observations$severity[
+      qc$qc_observations$observation_id == "flag_zero_library_samples"
+    ],
+    "warning"
+  )
 })
 
 test_that("microeda_qc flags zero-abundance features", {
@@ -143,6 +222,10 @@ test_that("microeda_qc handles all-zero libraries without Inf or NaN ratios", {
   )
   expect_true("high_sparsity" %in% qc$qc_flags$flag_id)
   expect_true("many_features_below_prevalence" %in% qc$qc_flags$flag_id)
+  expect_true("flag_high_sparsity" %in% qc$qc_observations$observation_id)
+  expect_true("flag_many_features_below_prevalence" %in%
+    qc$qc_observations$observation_id)
+  expect_false(any(is.na(qc$qc_observations$message)))
 })
 
 test_that("microeda_qc returns NULL for missing taxonomy and metadata", {
@@ -264,6 +347,10 @@ test_that("microeda_qc applies the min_prevalence threshold", {
   expect_equal(qc$prevalence_summary$fraction_features_below_threshold, 0.75)
   expect_true("many_features_below_prevalence" %in% qc$qc_flags$flag_id)
   expect_true("many_single_sample_features" %in% qc$qc_flags$flag_id)
+  expect_true("flag_many_features_below_prevalence" %in%
+    qc$qc_observations$observation_id)
+  expect_true("flag_many_single_sample_features" %in%
+    qc$qc_observations$observation_id)
 })
 
 test_that("microeda_qc summarizes prevalence edge cases", {

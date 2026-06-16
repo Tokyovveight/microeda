@@ -29,6 +29,8 @@
 #'       `min_prevalence` threshold.}
 #'     \item{`qc_flags`}{A data frame of conservative QC flags. Empty when no
 #'       simple library-size, sparsity, or prevalence flags are triggered.}
+#'     \item{`qc_observations`}{A data frame of concise human-readable QC
+#'       observations derived from the compact summaries and QC flags.}
 #'     \item{`per_rank`}{One row per taxonomy rank with `rank`, `n_assigned`,
 #'       `n_unique`, `missing_fraction`. `NULL` when no taxonomy is supplied.}
 #'     \item{`metadata_completeness`}{One row per metadata column with
@@ -66,6 +68,14 @@ microeda_qc <- function(x,
   )
   per_rank <- .qc_per_rank(extracted$taxonomy)
   meta_complete <- .qc_metadata_completeness(extracted$metadata, group = group)
+  qc_observations <- .qc_observations(
+    library_size_summary = library_size_summary,
+    sparsity_summary = sparsity_summary,
+    prevalence_summary = prevalence_summary,
+    qc_flags = qc_flags,
+    per_rank = per_rank,
+    metadata_completeness = meta_complete
+  )
 
   structure(
     list(
@@ -75,6 +85,7 @@ microeda_qc <- function(x,
       sparsity_summary = sparsity_summary,
       prevalence_summary = prevalence_summary,
       qc_flags = qc_flags,
+      qc_observations = qc_observations,
       per_rank = per_rank,
       metadata_completeness = meta_complete,
       params = list(
@@ -85,6 +96,147 @@ microeda_qc <- function(x,
     ),
     class = "microeda_qc"
   )
+}
+
+.qc_observations <- function(library_size_summary,
+                             sparsity_summary,
+                             prevalence_summary,
+                             qc_flags,
+                             per_rank,
+                             metadata_completeness) {
+  observations <- list(
+    .qc_observation(
+      observation_id = "input_dimensions",
+      category = "input",
+      severity = "info",
+      message = paste0(
+        "Input contains ",
+        library_size_summary$n_samples,
+        " sample(s) and ",
+        prevalence_summary$n_features,
+        " feature(s)."
+      )
+    ),
+    .qc_observation(
+      observation_id = "total_reads",
+      category = "library_size",
+      severity = "info",
+      message = paste0(
+        "Total reads across all samples: ",
+        library_size_summary$total_reads,
+        "."
+      )
+    ),
+    .qc_observation(
+      observation_id = "overall_zero_fraction",
+      category = "sparsity",
+      severity = "info",
+      message = paste0(
+        "Overall zero fraction: ",
+        .qc_format_percent(sparsity_summary$overall_zero_fraction),
+        "."
+      )
+    ),
+    .qc_observation(
+      observation_id = "features_above_prevalence",
+      category = "prevalence",
+      severity = "info",
+      message = paste0(
+        prevalence_summary$n_features_above_threshold,
+        " feature(s) are at or above the min_prevalence threshold (",
+        prevalence_summary$min_prevalence_threshold,
+        ")."
+      )
+    )
+  )
+
+  if (is.null(metadata_completeness)) {
+    observations[[length(observations) + 1]] <- .qc_observation(
+      observation_id = "metadata_absent",
+      category = "metadata",
+      severity = "info",
+      message = "Metadata table is absent."
+    )
+  } else {
+    observations[[length(observations) + 1]] <- .qc_observation(
+      observation_id = "metadata_columns",
+      category = "metadata",
+      severity = "info",
+      message = paste0(
+        nrow(metadata_completeness),
+        " metadata column(s) are available for completeness checks."
+      )
+    )
+  }
+
+  if (is.null(per_rank)) {
+    observations[[length(observations) + 1]] <- .qc_observation(
+      observation_id = "taxonomy_absent",
+      category = "taxonomy",
+      severity = "info",
+      message = "Taxonomy table is absent."
+    )
+  } else {
+    observations[[length(observations) + 1]] <- .qc_observation(
+      observation_id = "taxonomy_ranks",
+      category = "taxonomy",
+      severity = "info",
+      message = paste0(
+        nrow(per_rank),
+        " taxonomy rank(s) are available for completeness checks."
+      )
+    )
+  }
+
+  if (nrow(qc_flags) > 0) {
+    flag_observations <- lapply(seq_len(nrow(qc_flags)), function(i) {
+      flag <- qc_flags[i, , drop = FALSE]
+      .qc_observation(
+        observation_id = paste0("flag_", flag$flag_id),
+        category = .qc_flag_category(flag$flag_id),
+        severity = flag$severity,
+        message = flag$message
+      )
+    })
+    observations <- c(observations, flag_observations)
+  }
+
+  out <- do.call(rbind, observations)
+  rownames(out) <- NULL
+  out[!duplicated(out$observation_id), , drop = FALSE]
+}
+
+.qc_observation <- function(observation_id, category, severity, message) {
+  data.frame(
+    observation_id = observation_id,
+    category = category,
+    severity = severity,
+    message = message,
+    stringsAsFactors = FALSE
+  )
+}
+
+.qc_flag_category <- function(flag_id) {
+  if (flag_id %in% c("zero_library_samples", "library_size_imbalance")) {
+    return("library_size")
+  }
+
+  if (flag_id %in% c("zero_abundance_features", "high_sparsity")) {
+    return("sparsity")
+  }
+
+  if (flag_id %in% c(
+    "many_features_below_prevalence",
+    "many_single_sample_features"
+  )) {
+    return("prevalence")
+  }
+
+  "input"
+}
+
+.qc_format_percent <- function(x) {
+  paste0(format(round(100 * x, 2), trim = TRUE, scientific = FALSE), "%")
 }
 
 .qc_prevalence_summary <- function(per_feature, min_prevalence, n_samples) {
