@@ -34,12 +34,21 @@ in the per-feature table. The per-sample \code{n_features_above_prevalence}
 count is restricted to features at or above the threshold.}
 }
 \value{
-A \code{microeda_qc} object with the following tidy data frames:
+A \code{microeda_qc} object with the following tidy data frames and
+compact summaries:
 \describe{
 \item{\code{per_sample}}{One row per sample with \code{sample_id}, \code{library_size},
 \code{zero_fraction}, \code{n_features_detected}, \code{n_features_above_prevalence}.}
 \item{\code{per_feature}}{One row per feature with \code{feature_id}, \code{total_reads},
 \code{prevalence}, \code{n_samples_detected}, \code{above_prevalence_threshold}.}
+\item{\code{library_size_summary}}{A named list with compact library-size
+diagnostics, including total reads, quartiles, zero-library samples,
+and imbalance ratios.}
+\item{\code{sparsity_summary}}{A named list with matrix-wide zero fraction,
+zero-library samples, zero-abundance features, and median sample/feature
+zero fractions.}
+\item{\code{qc_flags}}{A data frame of conservative QC flags. Empty when no
+simple library-size or sparsity flags are triggered.}
 \item{\code{per_rank}}{One row per taxonomy rank with \code{rank}, \code{n_assigned},
 \code{n_unique}, \code{missing_fraction}. \code{NULL} when no taxonomy is supplied.}
 \item{\code{metadata_completeness}}{One row per metadata column with

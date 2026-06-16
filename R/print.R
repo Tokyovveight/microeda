@@ -226,6 +226,44 @@ print.microeda_qc <- function(x, ...) {
   cat("-------------------\n")
   cat("Per-sample:       ", nrow(x$per_sample), " samples\n", sep = "")
   cat("Per-feature:      ", nrow(x$per_feature), " features\n", sep = "")
+  cat(
+    "Reads total:      ",
+    format_number(x$library_size_summary$total_reads),
+    "\n",
+    sep = ""
+  )
+  cat(
+    "Library median:   ",
+    format_number(x$library_size_summary$median),
+    " (range ",
+    format_number(x$library_size_summary$min),
+    " - ",
+    format_number(x$library_size_summary$max),
+    ")\n",
+    sep = ""
+  )
+  cat(
+    "Zero libraries:   ",
+    x$library_size_summary$zero_library_samples,
+    " (",
+    format_percent(x$sparsity_summary$zero_library_sample_fraction),
+    ")\n",
+    sep = ""
+  )
+  cat(
+    "Overall zeros:    ",
+    format_percent(x$sparsity_summary$overall_zero_fraction),
+    "\n",
+    sep = ""
+  )
+  cat(
+    "Zero features:    ",
+    x$sparsity_summary$zero_abundance_features,
+    " (",
+    format_percent(x$sparsity_summary$zero_abundance_feature_fraction),
+    ")\n",
+    sep = ""
+  )
 
   if (!is.null(x$per_rank)) {
     cat("Per-rank:         ", nrow(x$per_rank), " ranks\n", sep = "")
@@ -239,6 +277,20 @@ print.microeda_qc <- function(x, ...) {
     cat("Metadata:         not provided\n")
   }
 
-  cat("\nUse x$per_sample, x$per_feature, x$per_rank, x$metadata_completeness.\n")
+  if (nrow(x$qc_flags) > 0) {
+    cat("\nQC flags:\n")
+    for (i in seq_len(nrow(x$qc_flags))) {
+      flag <- x$qc_flags[i, , drop = FALSE]
+      cat("- [", flag$severity, "] ", flag$message, "\n", sep = "")
+    }
+  } else {
+    cat("\nQC flags: none\n")
+  }
+
+  cat(
+    "\nUse x$per_sample, x$per_feature, x$library_size_summary, ",
+    "x$sparsity_summary, x$per_rank, x$metadata_completeness.\n",
+    sep = ""
+  )
   invisible(x)
 }

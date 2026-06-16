@@ -31,6 +31,85 @@ test_that("microeda_qc builds per-sample and per-feature tables from a matrix", 
   expect_equal(qc$per_sample$library_size, c(15, 21, 4, 6))
   expect_equal(qc$per_sample$n_features_detected, c(2, 2, 1, 3))
   expect_equal(qc$per_feature$total_reads, c(32, 7, 1, 6))
+  expect_true(all(c(
+    "library_size_summary", "sparsity_summary", "qc_flags"
+  ) %in% names(qc)))
+  expect_equal(qc$library_size_summary$n_samples, 4)
+  expect_equal(qc$library_size_summary$total_reads, 46)
+  expect_equal(qc$library_size_summary$min, 4)
+  expect_equal(qc$library_size_summary$median, 10.5)
+  expect_equal(qc$library_size_summary$nonzero_min, 4)
+  expect_equal(qc$library_size_summary$max_to_median_ratio, 2)
+  expect_equal(qc$library_size_summary$max_to_min_nonzero_ratio, 5.25)
+  expect_equal(qc$sparsity_summary$overall_zero_fraction, 0.5)
+  expect_equal(qc$sparsity_summary$zero_library_samples, 0)
+  expect_equal(qc$sparsity_summary$zero_abundance_features, 0)
+  expect_equal(qc$sparsity_summary$median_sample_zero_fraction, 0.5)
+  expect_equal(qc$sparsity_summary$median_feature_zero_fraction, 0.5)
+  expect_equal(nrow(qc$qc_flags), 0)
+})
+
+test_that("microeda_qc flags zero-library samples", {
+  counts <- matrix(
+    c(
+      0, 0, 0,
+      1, 0, 2,
+      0, 3, 0
+    ),
+    nrow = 3,
+    byrow = TRUE,
+    dimnames = list(paste0("s", 1:3), paste0("f", 1:3))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+
+  expect_equal(qc$library_size_summary$zero_library_samples, 1)
+  expect_equal(qc$sparsity_summary$zero_library_samples, 1)
+  expect_equal(qc$sparsity_summary$zero_library_sample_fraction, 1 / 3)
+  expect_true("zero_library_samples" %in% qc$qc_flags$flag_id)
+})
+
+test_that("microeda_qc flags zero-abundance features", {
+  counts <- matrix(
+    c(
+      1, 0, 0, 2,
+      3, 0, 4, 0
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(paste0("s", 1:2), paste0("f", 1:4))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+
+  expect_equal(qc$sparsity_summary$zero_abundance_features, 1)
+  expect_equal(qc$sparsity_summary$zero_abundance_feature_fraction, 0.25)
+  expect_true("zero_abundance_features" %in% qc$qc_flags$flag_id)
+})
+
+test_that("microeda_qc handles all-zero libraries without Inf or NaN ratios", {
+  counts <- matrix(
+    0,
+    nrow = 3,
+    ncol = 2,
+    dimnames = list(paste0("s", 1:3), paste0("f", 1:2))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  ratios <- c(
+    qc$library_size_summary$max_to_median_ratio,
+    qc$library_size_summary$max_to_min_nonzero_ratio
+  )
+
+  expect_equal(qc$library_size_summary$total_reads, 0)
+  expect_equal(qc$library_size_summary$zero_library_samples, 3)
+  expect_true(is.na(qc$library_size_summary$nonzero_min))
+  expect_true(all(is.na(ratios)))
+  expect_false(any(is.infinite(ratios)))
+  expect_false(any(is.nan(ratios)))
+  expect_equal(qc$sparsity_summary$overall_zero_fraction, 1)
+  expect_equal(qc$sparsity_summary$zero_abundance_features, 2)
+  expect_true("high_sparsity" %in% qc$qc_flags$flag_id)
 })
 
 test_that("microeda_qc returns NULL for missing taxonomy and metadata", {
