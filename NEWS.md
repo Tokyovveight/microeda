@@ -9,3 +9,5 @@
 * Added `microeda_qc_report()` as a minimal text QC report skeleton.
 * Added `include_flags` and `include_observations` content controls to
   `microeda_qc_report()`.
+* Added `microeda_qc_plot()` as a minimal base R library-size QC plotting
+  helper.

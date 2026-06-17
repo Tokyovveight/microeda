@@ -82,6 +82,7 @@ qc$per_rank
 qc$metadata_completeness
 as_qc_summary(qc)
 as_qc_summary(qc, include_observations = FALSE)
+microeda_qc_plot(qc)
 cat(microeda_qc_report(qc))
 cat(microeda_qc_report(
   qc,
@@ -96,6 +97,7 @@ taxonomy ranks, and metadata completeness.
 summaries, or downstream display.
 `microeda_qc_report()` returns a compact text summary that can be used as a
 starting point for QC reports.
+`microeda_qc_plot()` currently provides a base R library-size QC plot.
 The flags and observations lines can be omitted for a shorter report.
 
 ## Alpha diversity
