@@ -83,6 +83,7 @@ qc$metadata_completeness
 as_qc_summary(qc)
 as_qc_summary(qc, include_observations = FALSE)
 microeda_qc_plot(qc)
+microeda_qc_plot(qc, type = "sparsity")
 cat(microeda_qc_report(qc))
 cat(microeda_qc_report(
   qc,
@@ -97,7 +98,8 @@ taxonomy ranks, and metadata completeness.
 summaries, or downstream display.
 `microeda_qc_report()` returns a compact text summary that can be used as a
 starting point for QC reports.
-`microeda_qc_plot()` currently provides a base R library-size QC plot.
+`microeda_qc_plot()` currently supports base R library-size and sparsity QC
+plots.
 The flags and observations lines can be omitted for a shorter report.
 
 ## Alpha diversity
