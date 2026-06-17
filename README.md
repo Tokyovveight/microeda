@@ -83,6 +83,11 @@ qc$metadata_completeness
 as_qc_summary(qc)
 as_qc_summary(qc, include_observations = FALSE)
 cat(microeda_qc_report(qc))
+cat(microeda_qc_report(
+  qc,
+  include_flags = FALSE,
+  include_observations = FALSE
+))
 ```
 
 `microeda_qc()` returns structured diagnostics for samples, features,
@@ -91,6 +96,7 @@ taxonomy ranks, and metadata completeness.
 summaries, or downstream display.
 `microeda_qc_report()` returns a compact text summary that can be used as a
 starting point for QC reports.
+The flags and observations lines can be omitted for a shorter report.
 
 ## Alpha diversity
 
