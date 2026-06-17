@@ -196,6 +196,8 @@ as_qc_summary <- function(x, include_observations = TRUE) {
 #' richer QC reports.
 #'
 #' @param x A `microeda_qc` object.
+#' @param include_flags Whether to include the `QC flags:` line.
+#' @param include_observations Whether to include the `QC observations:` line.
 #'
 #' @return A single character string.
 #' @examples
@@ -209,10 +211,24 @@ as_qc_summary <- function(x, include_observations = TRUE) {
 #'
 #' qc <- microeda_qc(counts, taxa_are_rows = FALSE)
 #' microeda_qc_report(qc)
+#' microeda_qc_report(qc, include_flags = FALSE)
 #' @export
-microeda_qc_report <- function(x) {
+microeda_qc_report <- function(x,
+                               include_flags = TRUE,
+                               include_observations = TRUE) {
   if (!inherits(x, "microeda_qc")) {
     stop("`x` must be a microeda_qc object.", call. = FALSE)
+  }
+
+  if (!is.logical(include_flags) || length(include_flags) != 1 ||
+      is.na(include_flags)) {
+    stop("`include_flags` must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  if (!is.logical(include_observations) ||
+      length(include_observations) != 1 ||
+      is.na(include_observations)) {
+    stop("`include_observations` must be TRUE or FALSE.", call. = FALSE)
   }
 
   summary <- as_qc_summary(x, include_observations = FALSE)
@@ -234,10 +250,16 @@ microeda_qc_report <- function(x) {
       " zeros overall; ",
       x$sparsity_summary$zero_abundance_features,
       " zero-abundance feature(s)."
-    ),
-    paste0("QC flags: ", nrow(x$qc_flags)),
-    paste0("QC observations: ", nrow(x$qc_observations))
+    )
   )
+
+  if (isTRUE(include_flags)) {
+    lines <- c(lines, paste0("QC flags: ", nrow(x$qc_flags)))
+  }
+
+  if (isTRUE(include_observations)) {
+    lines <- c(lines, paste0("QC observations: ", nrow(x$qc_observations)))
+  }
 
   paste(lines, collapse = "\n")
 }

@@ -4,10 +4,14 @@
 \alias{microeda_qc_report}
 \title{Build a compact text QC report}
 \usage{
-microeda_qc_report(x)
+microeda_qc_report(x, include_flags = TRUE, include_observations = TRUE)
 }
 \arguments{
 \item{x}{A \code{microeda_qc} object.}
+
+\item{include_flags}{Whether to include the \verb{QC flags:} line.}
+
+\item{include_observations}{Whether to include the \verb{QC observations:} line.}
 }
 \value{
 A single character string.
@@ -28,4 +32,5 @@ colnames(counts) <- paste0("ASV", 1:4)
 
 qc <- microeda_qc(counts, taxa_are_rows = FALSE)
 microeda_qc_report(qc)
+microeda_qc_report(qc, include_flags = FALSE)
 }

@@ -185,7 +185,38 @@ test_that("microeda_qc_report returns compact text for QC objects", {
   expect_match(report, "Features: 3", fixed = TRUE)
   expect_match(report, "Total reads: 16", fixed = TRUE)
   expect_match(report, "Sparsity:", fixed = TRUE)
+  expect_match(report, "QC flags:", fixed = TRUE)
   expect_match(report, "QC observations:", fixed = TRUE)
+})
+
+test_that("microeda_qc_report content controls omit requested lines", {
+  counts <- matrix(
+    c(
+      10, 0, 0,
+      0, 5, 1
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2", "f3"))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+
+  no_flags <- microeda_qc_report(qc, include_flags = FALSE)
+  expect_false(grepl("QC flags:", no_flags, fixed = TRUE))
+  expect_match(no_flags, "QC observations:", fixed = TRUE)
+
+  no_observations <- microeda_qc_report(qc, include_observations = FALSE)
+  expect_match(no_observations, "QC flags:", fixed = TRUE)
+  expect_false(grepl("QC observations:", no_observations, fixed = TRUE))
+
+  compact <- microeda_qc_report(
+    qc,
+    include_flags = FALSE,
+    include_observations = FALSE
+  )
+  expect_false(grepl("QC flags:", compact, fixed = TRUE))
+  expect_false(grepl("QC observations:", compact, fixed = TRUE))
 })
 
 test_that("microeda_qc_report handles zero-library edge cases", {
@@ -209,6 +240,30 @@ test_that("microeda_qc_report handles zero-library edge cases", {
 
 test_that("microeda_qc_report validates input", {
   expect_error(microeda_qc_report(data.frame()), "microeda_qc")
+
+  counts <- matrix(
+    c(1, 2, 3, 4),
+    nrow = 2,
+    dimnames = list(c("s1", "s2"), c("f1", "f2"))
+  )
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+
+  expect_error(
+    microeda_qc_report(qc, include_flags = NA),
+    "include_flags"
+  )
+  expect_error(
+    microeda_qc_report(qc, include_flags = c(TRUE, FALSE)),
+    "include_flags"
+  )
+  expect_error(
+    microeda_qc_report(qc, include_observations = NA),
+    "include_observations"
+  )
+  expect_error(
+    microeda_qc_report(qc, include_observations = c(TRUE, FALSE)),
+    "include_observations"
+  )
 })
 
 test_that("microeda_qc returns stable human-readable observations", {
