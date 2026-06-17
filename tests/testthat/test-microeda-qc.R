@@ -307,6 +307,27 @@ test_that("microeda_qc_plot accepts explicit library-size type", {
   expect_true(is.numeric(result$value))
 })
 
+test_that("microeda_qc_plot draws sparsity barplots invisibly", {
+  counts <- matrix(
+    c(
+      10, 0, 0,
+      0, 5, 1
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2", "f3"))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  grDevices::pdf(tempfile(fileext = ".pdf"))
+  on.exit(grDevices::dev.off(), add = TRUE)
+
+  result <- withVisible(microeda_qc_plot(qc, type = "sparsity"))
+  expect_false(result$visible)
+  expect_true(is.numeric(result$value))
+  expect_length(result$value, nrow(qc$per_sample))
+})
+
 test_that("microeda_qc_plot validates input and type", {
   counts <- matrix(
     c(1, 2, 3, 4),
@@ -316,9 +337,18 @@ test_that("microeda_qc_plot validates input and type", {
   qc <- microeda_qc(counts, taxa_are_rows = FALSE)
 
   expect_error(microeda_qc_plot(data.frame()), "microeda_qc")
-  expect_error(microeda_qc_plot(qc, type = "sparsity"), "library_size")
-  expect_error(microeda_qc_plot(qc, type = NA_character_), "library_size")
-  expect_error(microeda_qc_plot(qc, type = c("library_size", "sparsity")), "library_size")
+  expect_error(
+    microeda_qc_plot(qc, type = "unknown"),
+    "library_size.*sparsity"
+  )
+  expect_error(
+    microeda_qc_plot(qc, type = NA_character_),
+    "library_size.*sparsity"
+  )
+  expect_error(
+    microeda_qc_plot(qc, type = c("library_size", "sparsity")),
+    "library_size.*sparsity"
+  )
 })
 
 test_that("microeda_qc returns stable human-readable observations", {

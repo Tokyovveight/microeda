@@ -9,7 +9,7 @@ microeda_qc_plot(x, type = "library_size", ...)
 \arguments{
 \item{x}{A \code{microeda_qc} object.}
 
-\item{type}{Plot type. Currently only \code{"library_size"} is supported.}
+\item{type}{Plot type. One of \code{"library_size"} or \code{"sparsity"}.}
 
 \item{...}{Additional arguments passed to \code{\link[graphics:barplot]{graphics::barplot()}}.}
 }
@@ -18,7 +18,8 @@ The value returned by \code{\link[graphics:barplot]{graphics::barplot()}}, invis
 }
 \description{
 \code{microeda_qc_plot()} draws small base R QC plots from a \code{microeda_qc}
-object. The current skeleton supports library-size barplots.
+object. The current skeleton supports library-size and per-sample sparsity
+barplots.
 }
 \examples{
 counts <- matrix(
@@ -31,4 +32,5 @@ colnames(counts) <- paste0("ASV", 1:4)
 
 qc <- microeda_qc(counts, taxa_are_rows = FALSE)
 microeda_qc_plot(qc)
+microeda_qc_plot(qc, type = "sparsity")
 }

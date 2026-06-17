@@ -267,10 +267,11 @@ microeda_qc_report <- function(x,
 #' Plot compact QC diagnostics
 #'
 #' `microeda_qc_plot()` draws small base R QC plots from a `microeda_qc`
-#' object. The current skeleton supports library-size barplots.
+#' object. The current skeleton supports library-size and per-sample sparsity
+#' barplots.
 #'
 #' @param x A `microeda_qc` object.
-#' @param type Plot type. Currently only `"library_size"` is supported.
+#' @param type Plot type. One of `"library_size"` or `"sparsity"`.
 #' @param ... Additional arguments passed to [graphics::barplot()].
 #'
 #' @return The value returned by [graphics::barplot()], invisibly.
@@ -285,13 +286,14 @@ microeda_qc_report <- function(x,
 #'
 #' qc <- microeda_qc(counts, taxa_are_rows = FALSE)
 #' microeda_qc_plot(qc)
+#' microeda_qc_plot(qc, type = "sparsity")
 #' @export
 microeda_qc_plot <- function(x, type = "library_size", ...) {
   if (!inherits(x, "microeda_qc")) {
     stop("`x` must be a microeda_qc object.", call. = FALSE)
   }
 
-  supported_types <- "library_size"
+  supported_types <- c("library_size", "sparsity")
   if (!is.character(type) || length(type) != 1 || is.na(type) ||
       !type %in% supported_types) {
     stop(
@@ -302,24 +304,32 @@ microeda_qc_plot <- function(x, type = "library_size", ...) {
     )
   }
 
-  library_sizes <- x$per_sample$library_size
-  names(library_sizes) <- x$per_sample$sample_id
+  if (identical(type, "library_size")) {
+    heights <- x$per_sample$library_size
+    ylab <- "Library size"
+    main <- "Library sizes"
+  } else {
+    heights <- x$per_sample$zero_fraction * 100
+    ylab <- "Zero entries (%)"
+    main <- "Per-sample sparsity"
+  }
+  names(heights) <- x$per_sample$sample_id
 
   dots <- list(...)
   if (is.null(dots$names.arg)) {
-    dots$names.arg <- names(library_sizes)
+    dots$names.arg <- names(heights)
   }
   if (is.null(dots$xlab)) {
     dots$xlab <- "Sample"
   }
   if (is.null(dots$ylab)) {
-    dots$ylab <- "Library size"
+    dots$ylab <- ylab
   }
   if (is.null(dots$main)) {
-    dots$main <- "Library sizes"
+    dots$main <- main
   }
 
-  invisible(do.call(graphics::barplot, c(list(height = library_sizes), dots)))
+  invisible(do.call(graphics::barplot, c(list(height = heights), dots)))
 }
 
 .qc_summary_row <- function(section, metric, value, message) {
