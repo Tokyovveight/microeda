@@ -267,11 +267,12 @@ microeda_qc_report <- function(x,
 #' Plot compact QC diagnostics
 #'
 #' `microeda_qc_plot()` draws small base R QC plots from a `microeda_qc`
-#' object. The current skeleton supports library-size and per-sample sparsity
-#' barplots.
+#' object. The current skeleton supports library-size, per-sample sparsity, and
+#' per-feature abundance barplots.
 #'
 #' @param x A `microeda_qc` object.
-#' @param type Plot type. One of `"library_size"` or `"sparsity"`.
+#' @param type Plot type. One of `"library_size"`, `"sparsity"`, or
+#'   `"feature_abundance"`.
 #' @param ... Additional arguments passed to [graphics::barplot()].
 #'
 #' @return The value returned by [graphics::barplot()], invisibly.
@@ -287,13 +288,14 @@ microeda_qc_report <- function(x,
 #' qc <- microeda_qc(counts, taxa_are_rows = FALSE)
 #' microeda_qc_plot(qc)
 #' microeda_qc_plot(qc, type = "sparsity")
+#' microeda_qc_plot(qc, type = "feature_abundance")
 #' @export
 microeda_qc_plot <- function(x, type = "library_size", ...) {
   if (!inherits(x, "microeda_qc")) {
     stop("`x` must be a microeda_qc object.", call. = FALSE)
   }
 
-  supported_types <- c("library_size", "sparsity")
+  supported_types <- c("library_size", "sparsity", "feature_abundance")
   if (!is.character(type) || length(type) != 1 || is.na(type) ||
       !type %in% supported_types) {
     stop(
@@ -306,21 +308,30 @@ microeda_qc_plot <- function(x, type = "library_size", ...) {
 
   if (identical(type, "library_size")) {
     heights <- x$per_sample$library_size
+    names(heights) <- x$per_sample$sample_id
+    xlab <- "Sample"
     ylab <- "Library size"
     main <- "Library sizes"
-  } else {
+  } else if (identical(type, "sparsity")) {
     heights <- x$per_sample$zero_fraction * 100
+    names(heights) <- x$per_sample$sample_id
+    xlab <- "Sample"
     ylab <- "Zero entries (%)"
     main <- "Per-sample sparsity"
+  } else {
+    heights <- x$per_feature$total_reads
+    names(heights) <- x$per_feature$feature_id
+    xlab <- "Feature"
+    ylab <- "Total abundance"
+    main <- "Feature abundances"
   }
-  names(heights) <- x$per_sample$sample_id
 
   dots <- list(...)
   if (is.null(dots$names.arg)) {
     dots$names.arg <- names(heights)
   }
   if (is.null(dots$xlab)) {
-    dots$xlab <- "Sample"
+    dots$xlab <- xlab
   }
   if (is.null(dots$ylab)) {
     dots$ylab <- ylab
