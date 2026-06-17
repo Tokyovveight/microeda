@@ -264,6 +264,64 @@ microeda_qc_report <- function(x,
   paste(lines, collapse = "\n")
 }
 
+#' Plot compact QC diagnostics
+#'
+#' `microeda_qc_plot()` draws small base R QC plots from a `microeda_qc`
+#' object. The current skeleton supports library-size barplots.
+#'
+#' @param x A `microeda_qc` object.
+#' @param type Plot type. Currently only `"library_size"` is supported.
+#' @param ... Additional arguments passed to [graphics::barplot()].
+#'
+#' @return The value returned by [graphics::barplot()], invisibly.
+#' @examples
+#' counts <- matrix(
+#'   c(10, 0, 0, 5, 20, 0, 1, 0),
+#'   nrow = 2,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- c("S1", "S2")
+#' colnames(counts) <- paste0("ASV", 1:4)
+#'
+#' qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+#' microeda_qc_plot(qc)
+#' @export
+microeda_qc_plot <- function(x, type = "library_size", ...) {
+  if (!inherits(x, "microeda_qc")) {
+    stop("`x` must be a microeda_qc object.", call. = FALSE)
+  }
+
+  supported_types <- "library_size"
+  if (!is.character(type) || length(type) != 1 || is.na(type) ||
+      !type %in% supported_types) {
+    stop(
+      "`type` must be one of: ",
+      paste0("\"", supported_types, "\"", collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  library_sizes <- x$per_sample$library_size
+  names(library_sizes) <- x$per_sample$sample_id
+
+  dots <- list(...)
+  if (is.null(dots$names.arg)) {
+    dots$names.arg <- names(library_sizes)
+  }
+  if (is.null(dots$xlab)) {
+    dots$xlab <- "Sample"
+  }
+  if (is.null(dots$ylab)) {
+    dots$ylab <- "Library size"
+  }
+  if (is.null(dots$main)) {
+    dots$main <- "Library sizes"
+  }
+
+  invisible(do.call(graphics::barplot, c(list(height = library_sizes), dots)))
+}
+
 .qc_summary_row <- function(section, metric, value, message) {
   data.frame(
     section = section,
