@@ -37,6 +37,28 @@ test_that("microeda_beta accepts explicit Bray-Curtis method", {
   expect_equal(beta$method, "bray")
 })
 
+test_that("as_beta_dist extracts stored beta distance objects", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+  distance <- as_beta_dist(beta)
+
+  expect_s3_class(distance, "dist")
+  expect_equal(attr(distance, "Labels"), beta$sample_ids)
+  expect_equal(distance, beta$distance)
+  expect_error(as_beta_dist(data.frame()), "microeda_beta")
+})
+
 test_that("microeda_beta assigns zero distance to all-zero sample pairs", {
   counts <- matrix(
     0,

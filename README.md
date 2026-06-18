@@ -157,10 +157,11 @@ beta <- microeda_beta(
   method = "bray"
 )
 
-beta$distance
+as_beta_dist(beta)
 ```
 
 `microeda_beta()` currently provides a base R Bray-Curtis distance helper only;
+`as_beta_dist()` returns the stored `dist` object.
 ordination, PERMANOVA, and plotting are not implemented yet.
 
 For `phyloseq`, pass the object directly:

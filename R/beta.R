@@ -60,6 +60,20 @@ microeda_beta <- function(x,
   )
 }
 
+#' Extract beta diversity distances
+#'
+#' @param x A `microeda_beta` object.
+#'
+#' @return A [stats::dist()] object.
+#' @export
+as_beta_dist <- function(x) {
+  if (!inherits(x, "microeda_beta")) {
+    stop("`x` must be a microeda_beta object.", call. = FALSE)
+  }
+
+  x$distance
+}
+
 validate_beta_method <- function(method) {
   supported_methods <- "bray"
   if (!is.character(method) || length(method) != 1 ||

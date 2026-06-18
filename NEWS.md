@@ -19,3 +19,5 @@
 * Added `microeda_alpha_plot()` for base R alpha diversity metric barplots.
 * Added grouped boxplot support to `microeda_alpha_plot()`.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
+* Added `as_beta_dist()` to extract beta diversity distances from
+  `microeda_beta` objects.
