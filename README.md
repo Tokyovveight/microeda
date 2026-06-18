@@ -122,6 +122,7 @@ alpha <- microeda_alpha(
 alpha
 as_alpha_table(alpha)
 as_alpha_summary(alpha)
+microeda_alpha_plot(alpha)
 ```
 
 The alpha table includes classic indices (`observed`, `chao1`, `shannon`,
@@ -129,6 +130,7 @@ The alpha table includes classic indices (`observed`, `chao1`, `shannon`,
 (`hill_q0`, `hill_q1`, `hill_q2`). In practice, `hill_q1 = exp(Shannon)` and
 `hill_q2 = inverse Simpson`, which makes the values easier to interpret as
 effective numbers of taxa.
+`microeda_alpha_plot()` provides a base R barplot for alpha diversity metrics.
 
 Group comparisons are intentionally exploratory and include depth/coverage
 diagnostics:
