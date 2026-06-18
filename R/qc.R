@@ -267,12 +267,12 @@ microeda_qc_report <- function(x,
 #' Plot compact QC diagnostics
 #'
 #' `microeda_qc_plot()` draws small base R QC plots from a `microeda_qc`
-#' object. The current skeleton supports library-size, per-sample sparsity, and
-#' per-feature abundance barplots.
+#' object. The current skeleton supports library-size, per-sample sparsity,
+#' per-feature abundance, and per-feature prevalence barplots.
 #'
 #' @param x A `microeda_qc` object.
-#' @param type Plot type. One of `"library_size"`, `"sparsity"`, or
-#'   `"feature_abundance"`.
+#' @param type Plot type. One of `"library_size"`, `"sparsity"`,
+#'   `"feature_abundance"`, or `"prevalence"`.
 #' @param ... Additional arguments passed to [graphics::barplot()].
 #'
 #' @return The value returned by [graphics::barplot()], invisibly.
@@ -289,13 +289,19 @@ microeda_qc_report <- function(x,
 #' microeda_qc_plot(qc)
 #' microeda_qc_plot(qc, type = "sparsity")
 #' microeda_qc_plot(qc, type = "feature_abundance")
+#' microeda_qc_plot(qc, type = "prevalence")
 #' @export
 microeda_qc_plot <- function(x, type = "library_size", ...) {
   if (!inherits(x, "microeda_qc")) {
     stop("`x` must be a microeda_qc object.", call. = FALSE)
   }
 
-  supported_types <- c("library_size", "sparsity", "feature_abundance")
+  supported_types <- c(
+    "library_size",
+    "sparsity",
+    "feature_abundance",
+    "prevalence"
+  )
   if (!is.character(type) || length(type) != 1 || is.na(type) ||
       !type %in% supported_types) {
     stop(
@@ -318,12 +324,18 @@ microeda_qc_plot <- function(x, type = "library_size", ...) {
     xlab <- "Sample"
     ylab <- "Zero entries (%)"
     main <- "Per-sample sparsity"
-  } else {
+  } else if (identical(type, "feature_abundance")) {
     heights <- x$per_feature$total_reads
     names(heights) <- x$per_feature$feature_id
     xlab <- "Feature"
     ylab <- "Total abundance"
     main <- "Feature abundances"
+  } else {
+    heights <- x$per_feature$prevalence * 100
+    names(heights) <- x$per_feature$feature_id
+    xlab <- "Feature"
+    ylab <- "Prevalence (%)"
+    main <- "Feature prevalence"
   }
 
   dots <- list(...)
