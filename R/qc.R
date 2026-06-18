@@ -198,7 +198,8 @@ as_qc_summary <- function(x, include_observations = TRUE) {
 #' @param x A `microeda_qc` object.
 #'
 #' @return A data frame with columns `issue_type`, `issue_id`, `category`,
-#'   `severity`, `message`, `flag_id`, and `observation_id`.
+#'   `severity`, `message`, `flag_id`, and `observation_id`. If no issues are
+#'   present, the data frame has zero rows and the same columns.
 #' @examples
 #' counts <- matrix(
 #'   c(0, 0, 1, 0),

@@ -11,7 +11,8 @@ as_qc_issues(x)
 }
 \value{
 A data frame with columns \code{issue_type}, \code{issue_id}, \code{category},
-\code{severity}, \code{message}, \code{flag_id}, and \code{observation_id}.
+\code{severity}, \code{message}, \code{flag_id}, and \code{observation_id}. If no issues are
+present, the data frame has zero rows and the same columns.
 }
 \description{
 \code{as_qc_issues()} combines issue-like rows from a \code{microeda_qc} object into a
