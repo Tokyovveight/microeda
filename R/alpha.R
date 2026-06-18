@@ -89,30 +89,47 @@ as_alpha_summary <- function(x) {
 
 #' Plot an alpha diversity metric
 #'
-#' `microeda_alpha_plot()` draws a minimal base R barplot for one numeric alpha
-#' diversity metric across samples.
+#' `microeda_alpha_plot()` draws minimal base R plots for one numeric alpha
+#' diversity metric. Use `type = "bar"` for per-sample barplots or
+#' `type = "boxplot"` for grouped boxplots.
 #'
 #' @param x A `microeda_alpha` object.
 #' @param metric Optional metric column to plot. If `NULL`, the first available
 #'   alpha diversity metric is used.
-#' @param ... Additional arguments passed to [graphics::barplot()].
+#' @param type Plot type. One of `"bar"` or `"boxplot"`.
+#' @param group Optional grouping column for `type = "boxplot"`. If `NULL`, the
+#'   stored group from `x` is used.
+#' @param ... Additional arguments passed to [graphics::barplot()] for
+#'   `type = "bar"` or [graphics::boxplot()] for `type = "boxplot"`.
 #'
-#' @return The value returned by [graphics::barplot()], invisibly.
+#' @return The value returned by the base R plotting function, invisibly.
 #' @examples
 #' counts <- matrix(c(10, 0, 0, 5, 20, 0, 1, 0), nrow = 2, byrow = TRUE)
 #' rownames(counts) <- c("S1", "S2")
 #' colnames(counts) <- paste0("ASV", 1:4)
+#' metadata <- data.frame(group = c("A", "B"), row.names = rownames(counts))
 #'
-#' alpha <- microeda_alpha(counts, taxa_are_rows = FALSE)
+#' alpha <- microeda_alpha(
+#'   counts,
+#'   metadata = metadata,
+#'   group = "group",
+#'   taxa_are_rows = FALSE
+#' )
 #' microeda_alpha_plot(alpha)
 #' microeda_alpha_plot(alpha, metric = "shannon")
+#' microeda_alpha_plot(alpha, metric = "shannon", type = "boxplot")
 #' @export
-microeda_alpha_plot <- function(x, metric = NULL, ...) {
+microeda_alpha_plot <- function(x,
+                                metric = NULL,
+                                type = c("bar", "boxplot"),
+                                group = NULL,
+                                ...) {
   if (!inherits(x, "microeda_alpha")) {
     stop("`x` must be a microeda_alpha object.", call. = FALSE)
   }
 
   alpha_table <- x$indices
+  type <- validate_alpha_plot_type(type)
   metric_names <- alpha_numeric_metric_names(alpha_table, group = x$group)
 
   if (is.null(metric)) {
@@ -131,6 +148,20 @@ microeda_alpha_plot <- function(x, metric = NULL, ...) {
     )
   }
 
+  if (identical(type, "boxplot")) {
+    group <- resolve_alpha_plot_group(
+      alpha_table = alpha_table,
+      group = group,
+      stored_group = x$group,
+      metric_names = metric_names
+    )
+    return(plot_alpha_boxplot(alpha_table, metric = metric, group = group, ...))
+  }
+
+  plot_alpha_barplot(alpha_table, metric = metric, ...)
+}
+
+plot_alpha_barplot <- function(alpha_table, metric, ...) {
   heights <- alpha_table[[metric]]
   names(heights) <- alpha_table$sample_id
 
@@ -149,6 +180,27 @@ microeda_alpha_plot <- function(x, metric = NULL, ...) {
   }
 
   invisible(do.call(graphics::barplot, c(list(height = heights), dots)))
+}
+
+plot_alpha_boxplot <- function(alpha_table, metric, group, ...) {
+  metric_values <- alpha_table[[metric]]
+  group_values <- alpha_table[[group]]
+
+  dots <- list(...)
+  if (is.null(dots$xlab)) {
+    dots$xlab <- group
+  }
+  if (is.null(dots$ylab)) {
+    dots$ylab <- metric
+  }
+  if (is.null(dots$main)) {
+    dots$main <- paste("Alpha diversity by group:", metric)
+  }
+
+  invisible(do.call(
+    graphics::boxplot,
+    c(list(metric_values ~ group_values), dots)
+  ))
 }
 
 #' Compare alpha diversity indices across groups
@@ -271,6 +323,25 @@ as_alpha_pairwise <- function(x) {
   x$pairwise
 }
 
+validate_alpha_plot_type <- function(type) {
+  supported_types <- c("bar", "boxplot")
+  if (identical(type, supported_types)) {
+    return("bar")
+  }
+
+  if (!is.character(type) || length(type) != 1 || is.na(type) ||
+      !type %in% supported_types) {
+    stop(
+      "`type` must be one of: ",
+      paste0("\"", supported_types, "\"", collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  type
+}
+
 alpha_numeric_metric_names <- function(alpha_table, group = NULL) {
   excluded <- c("sample_id", group)
   metric_names <- names(alpha_table)[vapply(alpha_table, is.numeric, logical(1))]
@@ -301,6 +372,42 @@ default_alpha_plot_metric <- function(metric_names) {
   }
 
   metric
+}
+
+resolve_alpha_plot_group <- function(alpha_table,
+                                     group = NULL,
+                                     stored_group = NULL,
+                                     metric_names = character()) {
+  if (is.null(group)) {
+    group <- stored_group
+  } else if (!is.character(group) || length(group) != 1 ||
+             is.na(group) || !nzchar(group)) {
+    stop("`group` must be a single non-missing character string.", call. = FALSE)
+  }
+
+  if (is.null(group)) {
+    stop(
+      "`group` is required for `type = \"boxplot\"` when the alpha object has no stored group.",
+      call. = FALSE
+    )
+  }
+
+  if (!group %in% names(alpha_table)) {
+    stop("`group` must name a column in the alpha table.", call. = FALSE)
+  }
+
+  if (group %in% metric_names) {
+    stop("`group` must name a grouping column, not a numeric alpha metric.", call. = FALSE)
+  }
+
+  group_values <- alpha_table[[group]]
+  group_values <- as.character(group_values)
+  group_values[is.na(group_values)] <- ""
+  if (all(trimws(group_values) == "")) {
+    stop("`group` must contain at least one non-missing group value.", call. = FALSE)
+  }
+
+  group
 }
 
 calculate_alpha_indices <- function(counts, count_based_ok = TRUE) {

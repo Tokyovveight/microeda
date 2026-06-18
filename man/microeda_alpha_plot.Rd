@@ -4,7 +4,13 @@
 \alias{microeda_alpha_plot}
 \title{Plot an alpha diversity metric}
 \usage{
-microeda_alpha_plot(x, metric = NULL, ...)
+microeda_alpha_plot(
+  x,
+  metric = NULL,
+  type = c("bar", "boxplot"),
+  group = NULL,
+  ...
+)
 }
 \arguments{
 \item{x}{A \code{microeda_alpha} object.}
@@ -12,21 +18,35 @@ microeda_alpha_plot(x, metric = NULL, ...)
 \item{metric}{Optional metric column to plot. If \code{NULL}, the first available
 alpha diversity metric is used.}
 
-\item{...}{Additional arguments passed to \code{\link[graphics:barplot]{graphics::barplot()}}.}
+\item{type}{Plot type. One of \code{"bar"} or \code{"boxplot"}.}
+
+\item{group}{Optional grouping column for \code{type = "boxplot"}. If \code{NULL}, the
+stored group from \code{x} is used.}
+
+\item{...}{Additional arguments passed to \code{\link[graphics:barplot]{graphics::barplot()}} for
+\code{type = "bar"} or \code{\link[graphics:boxplot]{graphics::boxplot()}} for \code{type = "boxplot"}.}
 }
 \value{
-The value returned by \code{\link[graphics:barplot]{graphics::barplot()}}, invisibly.
+The value returned by the base R plotting function, invisibly.
 }
 \description{
-\code{microeda_alpha_plot()} draws a minimal base R barplot for one numeric alpha
-diversity metric across samples.
+\code{microeda_alpha_plot()} draws minimal base R plots for one numeric alpha
+diversity metric. Use \code{type = "bar"} for per-sample barplots or
+\code{type = "boxplot"} for grouped boxplots.
 }
 \examples{
 counts <- matrix(c(10, 0, 0, 5, 20, 0, 1, 0), nrow = 2, byrow = TRUE)
 rownames(counts) <- c("S1", "S2")
 colnames(counts) <- paste0("ASV", 1:4)
+metadata <- data.frame(group = c("A", "B"), row.names = rownames(counts))
 
-alpha <- microeda_alpha(counts, taxa_are_rows = FALSE)
+alpha <- microeda_alpha(
+  counts,
+  metadata = metadata,
+  group = "group",
+  taxa_are_rows = FALSE
+)
 microeda_alpha_plot(alpha)
 microeda_alpha_plot(alpha, metric = "shannon")
+microeda_alpha_plot(alpha, metric = "shannon", type = "boxplot")
 }
