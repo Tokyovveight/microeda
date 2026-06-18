@@ -82,7 +82,7 @@ qc$per_rank
 qc$metadata_completeness
 as_qc_summary(qc)
 as_qc_summary(qc, include_observations = FALSE)
-microeda_qc_plot(qc)
+microeda_qc_plot(qc, type = "library_size")
 microeda_qc_plot(qc, type = "sparsity")
 microeda_qc_plot(qc, type = "feature_abundance")
 cat(microeda_qc_report(qc))
