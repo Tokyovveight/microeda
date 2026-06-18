@@ -27,3 +27,5 @@
 * Added `as_beta_samples()` to extract sample IDs and optional groups from
   `microeda_beta` objects.
 * Added `microeda_beta_plot()` for base R heatmaps of beta diversity distances.
+* Added `microeda_beta_ordination()` and `as_beta_coordinates()` for initial
+  PCoA ordination of beta diversity distances.

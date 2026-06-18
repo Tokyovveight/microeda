@@ -219,6 +219,17 @@ print.microeda_beta <- function(x, ...) {
   invisible(x)
 }
 
+#' @export
+print.microeda_beta_ordination <- function(x, ...) {
+  cat("<microeda_beta_ordination>\n")
+  cat("Method:          ", x$method, "\n", sep = "")
+  cat("Distance method: ", x$distance_method, "\n", sep = "")
+  cat("Samples:         ", length(x$sample_ids), "\n", sep = "")
+  cat("Dimensions:      ", x$dimensions, "\n", sep = "")
+  cat("Group:           ", if (is.null(x$group)) "<none>" else x$group, "\n", sep = "")
+  invisible(x)
+}
+
 format_p <- function(x) {
   if (is.na(x)) {
     return("NA")
