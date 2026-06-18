@@ -74,6 +74,16 @@ as_beta_dist <- function(x) {
   x$distance
 }
 
+#' Extract beta diversity distances as a matrix
+#'
+#' @param x A `microeda_beta` object.
+#'
+#' @return A square numeric matrix of beta diversity distances.
+#' @export
+as_beta_matrix <- function(x) {
+  as.matrix(as_beta_dist(x))
+}
+
 validate_beta_method <- function(method) {
   supported_methods <- "bray"
   if (!is.character(method) || length(method) != 1 ||

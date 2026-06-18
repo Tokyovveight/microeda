@@ -59,6 +59,31 @@ test_that("as_beta_dist extracts stored beta distance objects", {
   expect_error(as_beta_dist(data.frame()), "microeda_beta")
 })
 
+test_that("as_beta_matrix extracts square beta distance matrices", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+  distance_matrix <- as_beta_matrix(beta)
+
+  expect_true(is.matrix(distance_matrix))
+  expect_equal(dim(distance_matrix), c(3L, 3L))
+  expect_equal(rownames(distance_matrix), beta$sample_ids)
+  expect_equal(colnames(distance_matrix), beta$sample_ids)
+  expect_equal(distance_matrix, as.matrix(as_beta_dist(beta)))
+  expect_equal(unname(diag(distance_matrix)), rep(0, length(beta$sample_ids)))
+  expect_error(as_beta_matrix(data.frame()), "microeda_beta")
+})
+
 test_that("microeda_beta assigns zero distance to all-zero sample pairs", {
   counts <- matrix(
     0,
