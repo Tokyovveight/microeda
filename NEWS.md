@@ -17,3 +17,4 @@
 * Added `type = "feature_abundance"` support to `microeda_qc_plot()`.
 * Added `type = "prevalence"` support to `microeda_qc_plot()`.
 * Added `microeda_alpha_plot()` for base R alpha diversity metric barplots.
+* Added grouped boxplot support to `microeda_alpha_plot()`.
