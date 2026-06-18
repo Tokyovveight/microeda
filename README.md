@@ -82,6 +82,7 @@ qc$per_rank
 qc$metadata_completeness
 as_qc_summary(qc)
 as_qc_summary(qc, include_observations = FALSE)
+as_qc_issues(qc)
 microeda_qc_plot(qc, type = "library_size")
 microeda_qc_plot(qc, type = "sparsity")
 microeda_qc_plot(qc, type = "feature_abundance")
@@ -98,6 +99,8 @@ cat(microeda_qc_report(
 taxonomy ranks, and metadata completeness.
 `as_qc_summary()` returns a compact data frame for reports, README-style
 summaries, or downstream display.
+`as_qc_issues()` returns a compact data frame of QC flags and observations for
+downstream display or reporting.
 `microeda_qc_report()` returns a compact text summary that can be used as a
 starting point for QC reports.
 `microeda_qc_plot()` currently supports base R library-size, sparsity,
