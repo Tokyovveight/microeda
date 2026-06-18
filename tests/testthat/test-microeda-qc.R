@@ -326,6 +326,68 @@ test_that("microeda_qc_report validates input", {
   )
 })
 
+test_that("microeda_qc_write_report writes reports and returns paths invisibly", {
+  counts <- matrix(
+    c(
+      10, 0, 0,
+      0, 5, 1
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2", "f3"))
+  )
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  path <- tempfile(fileext = ".txt")
+
+  result <- withVisible(microeda_qc_write_report(qc, path))
+  contents <- readLines(path, warn = FALSE)
+
+  expect_false(result$visible)
+  expect_equal(result$value, path)
+  expect_true(file.exists(path))
+  expect_true(any(contents == "microeda QC report"))
+})
+
+test_that("microeda_qc_write_report passes report content controls through", {
+  counts <- matrix(
+    c(
+      10, 0, 0,
+      0, 5, 1
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2", "f3"))
+  )
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  path <- tempfile(fileext = ".txt")
+
+  microeda_qc_write_report(
+    qc,
+    path,
+    include_flags = FALSE,
+    include_observations = FALSE
+  )
+  contents <- readLines(path, warn = FALSE)
+
+  expect_false(any(grepl("QC flags:", contents, fixed = TRUE)))
+  expect_false(any(grepl("QC observations:", contents, fixed = TRUE)))
+})
+
+test_that("microeda_qc_write_report validates input and file", {
+  counts <- matrix(
+    c(1, 2, 3, 4),
+    nrow = 2,
+    dimnames = list(c("s1", "s2"), c("f1", "f2"))
+  )
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+
+  expect_error(microeda_qc_write_report(data.frame(), tempfile()), "microeda_qc")
+  expect_error(microeda_qc_write_report(qc, NA_character_), "file")
+  expect_error(microeda_qc_write_report(qc, character()), "file")
+  expect_error(microeda_qc_write_report(qc, c("a", "b")), "file")
+  expect_error(microeda_qc_write_report(qc, ""), "file")
+})
+
 test_that("microeda_qc_plot draws library-size barplots invisibly", {
   counts <- matrix(
     c(

@@ -301,6 +301,49 @@ microeda_qc_report <- function(x,
   paste(lines, collapse = "\n")
 }
 
+#' Write a compact text QC report
+#'
+#' `microeda_qc_write_report()` writes the text returned by
+#' [microeda_qc_report()] to a file.
+#'
+#' @param x A `microeda_qc` object.
+#' @param file A single non-missing file path.
+#' @param include_flags Whether to include the `QC flags:` line.
+#' @param include_observations Whether to include the `QC observations:` line.
+#'
+#' @return The `file` path, invisibly.
+#' @examples
+#' counts <- matrix(
+#'   c(10, 0, 0, 5, 20, 0, 1, 0),
+#'   nrow = 2,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- c("S1", "S2")
+#' colnames(counts) <- paste0("ASV", 1:4)
+#'
+#' qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+#' path <- tempfile(fileext = ".txt")
+#' microeda_qc_write_report(qc, path)
+#' @export
+microeda_qc_write_report <- function(x,
+                                     file,
+                                     include_flags = TRUE,
+                                     include_observations = TRUE) {
+  if (!is.character(file) || length(file) != 1 || is.na(file) ||
+      !nzchar(file)) {
+    stop("`file` must be a single non-missing character string.", call. = FALSE)
+  }
+
+  report <- microeda_qc_report(
+    x,
+    include_flags = include_flags,
+    include_observations = include_observations
+  )
+
+  writeLines(report, con = file)
+  invisible(file)
+}
+
 #' Plot compact QC diagnostics
 #'
 #' `microeda_qc_plot()` draws small base R QC plots from a `microeda_qc`
