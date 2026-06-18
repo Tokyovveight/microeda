@@ -84,6 +84,44 @@ test_that("as_beta_matrix extracts square beta distance matrices", {
   expect_error(as_beta_matrix(data.frame()), "microeda_beta")
 })
 
+test_that("as_beta_samples extracts sample IDs and optional groups", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "A", "B"),
+    row.names = rownames(counts)
+  )
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+  grouped_beta <- microeda_beta(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+
+  samples <- as_beta_samples(beta)
+  grouped_samples <- as_beta_samples(grouped_beta)
+
+  expect_s3_class(samples, "data.frame")
+  expect_named(samples, "sample_id")
+  expect_equal(samples$sample_id, beta$sample_ids)
+  expect_s3_class(grouped_samples, "data.frame")
+  expect_named(grouped_samples, c("sample_id", "group"))
+  expect_equal(grouped_samples$sample_id, grouped_beta$sample_ids)
+  expect_equal(grouped_samples$group, metadata$group)
+  expect_error(as_beta_samples(data.frame()), "microeda_beta")
+})
+
 test_that("microeda_beta prints compact summaries", {
   counts <- matrix(
     c(

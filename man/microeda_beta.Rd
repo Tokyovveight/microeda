@@ -47,5 +47,7 @@ rownames(counts) <- c("S1", "S2")
 colnames(counts) <- paste0("ASV", 1:3)
 
 beta <- microeda_beta(counts, taxa_are_rows = FALSE)
-beta$distance
+as_beta_dist(beta)
+as_beta_matrix(beta)
+as_beta_samples(beta)
 }

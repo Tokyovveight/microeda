@@ -160,11 +160,13 @@ beta <- microeda_beta(
 beta
 as_beta_dist(beta)
 as_beta_matrix(beta)
+as_beta_samples(beta)
 ```
 
 `microeda_beta()` currently provides a base R Bray-Curtis distance helper only;
 `as_beta_dist()` returns the stored `dist` object.
 `as_beta_matrix()` returns a square distance matrix.
+`as_beta_samples()` returns sample IDs and optional group labels.
 ordination, PERMANOVA, and plotting are not implemented yet.
 
 For `phyloseq`, pass the object directly:

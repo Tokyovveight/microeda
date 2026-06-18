@@ -20,7 +20,9 @@
 #' colnames(counts) <- paste0("ASV", 1:3)
 #'
 #' beta <- microeda_beta(counts, taxa_are_rows = FALSE)
-#' beta$distance
+#' as_beta_dist(beta)
+#' as_beta_matrix(beta)
+#' as_beta_samples(beta)
 #' @export
 microeda_beta <- function(x,
                           metadata = NULL,
@@ -82,6 +84,29 @@ as_beta_dist <- function(x) {
 #' @export
 as_beta_matrix <- function(x) {
   as.matrix(as_beta_dist(x))
+}
+
+#' Extract beta diversity sample labels
+#'
+#' @param x A `microeda_beta` object.
+#'
+#' @return A data frame with `sample_id` and, when present, `group`.
+#' @export
+as_beta_samples <- function(x) {
+  if (!inherits(x, "microeda_beta")) {
+    stop("`x` must be a microeda_beta object.", call. = FALSE)
+  }
+
+  out <- data.frame(
+    sample_id = x$sample_ids,
+    stringsAsFactors = FALSE
+  )
+
+  if (!is.null(x$group)) {
+    out$group <- unname(as.character(x$group_values))
+  }
+
+  out
 }
 
 validate_beta_method <- function(method) {
