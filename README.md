@@ -146,6 +146,23 @@ as_alpha_tests(alpha_cmp)
 as_alpha_pairwise(alpha_cmp)
 ```
 
+## Beta diversity
+
+```r
+beta <- microeda_beta(
+  counts,
+  metadata = metadata,
+  group = "group",
+  taxa_are_rows = FALSE,
+  method = "bray"
+)
+
+beta$distance
+```
+
+`microeda_beta()` currently provides a base R Bray-Curtis distance helper only;
+ordination, PERMANOVA, and plotting are not implemented yet.
+
 For `phyloseq`, pass the object directly:
 
 ```r
