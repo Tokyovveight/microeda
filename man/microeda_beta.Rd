@@ -50,4 +50,5 @@ beta <- microeda_beta(counts, taxa_are_rows = FALSE)
 as_beta_dist(beta)
 as_beta_matrix(beta)
 as_beta_samples(beta)
+microeda_beta_plot(beta)
 }

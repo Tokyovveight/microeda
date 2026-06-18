@@ -122,6 +122,65 @@ test_that("as_beta_samples extracts sample IDs and optional groups", {
   expect_error(as_beta_samples(data.frame()), "microeda_beta")
 })
 
+test_that("microeda_beta_plot draws heatmaps invisibly", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+  grDevices::pdf(tempfile(fileext = ".pdf"))
+  on.exit(grDevices::dev.off(), add = TRUE)
+
+  result <- withVisible(microeda_beta_plot(beta))
+  explicit_type <- withVisible(microeda_beta_plot(beta, type = "heatmap"))
+  custom_labels <- withVisible(microeda_beta_plot(
+    beta,
+    main = "Custom beta heatmap",
+    xlab = "Custom x",
+    ylab = "Custom y"
+  ))
+
+  expect_false(result$visible)
+  expect_null(result$value)
+  expect_false(explicit_type$visible)
+  expect_null(explicit_type$value)
+  expect_false(custom_labels$visible)
+  expect_null(custom_labels$value)
+})
+
+test_that("microeda_beta_plot validates input and type", {
+  counts <- matrix(
+    c(1, 0, 0, 1),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("S1", "S2"), c("ASV1", "ASV2"))
+  )
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+  supported_type_pattern <- "heatmap"
+
+  expect_error(microeda_beta_plot(data.frame()), "microeda_beta")
+  expect_error(
+    microeda_beta_plot(beta, type = "unknown"),
+    supported_type_pattern
+  )
+  expect_error(
+    microeda_beta_plot(beta, type = NA_character_),
+    supported_type_pattern
+  )
+  expect_error(
+    microeda_beta_plot(beta, type = c("heatmap", "heatmap")),
+    supported_type_pattern
+  )
+})
+
 test_that("microeda_beta prints compact summaries", {
   counts <- matrix(
     c(

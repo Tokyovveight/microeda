@@ -26,3 +26,4 @@
 * Added a compact print method for `microeda_beta` objects.
 * Added `as_beta_samples()` to extract sample IDs and optional groups from
   `microeda_beta` objects.
+* Added `microeda_beta_plot()` for base R heatmaps of beta diversity distances.

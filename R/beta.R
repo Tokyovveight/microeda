@@ -23,6 +23,7 @@
 #' as_beta_dist(beta)
 #' as_beta_matrix(beta)
 #' as_beta_samples(beta)
+#' microeda_beta_plot(beta)
 #' @export
 microeda_beta <- function(x,
                           metadata = NULL,
@@ -109,6 +110,36 @@ as_beta_samples <- function(x) {
   out
 }
 
+#' Plot beta diversity distances
+#'
+#' `microeda_beta_plot()` draws a minimal base R heatmap of beta diversity
+#' distances. The current implementation supports `type = "heatmap"` only.
+#'
+#' @param x A `microeda_beta` object.
+#' @param type Plot type. Only `"heatmap"` is currently supported.
+#' @param ... Additional arguments passed to [graphics::image()].
+#'
+#' @return The value returned by [graphics::image()], invisibly.
+#' @examples
+#' counts <- matrix(c(1, 2, 0, 2, 1, 0), nrow = 2, byrow = TRUE)
+#' rownames(counts) <- c("S1", "S2")
+#' colnames(counts) <- paste0("ASV", 1:3)
+#'
+#' beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+#' microeda_beta_plot(beta)
+#' @export
+microeda_beta_plot <- function(x, type = "heatmap", ...) {
+  if (!inherits(x, "microeda_beta")) {
+    stop("`x` must be a microeda_beta object.", call. = FALSE)
+  }
+
+  type <- validate_beta_plot_type(type)
+
+  if (identical(type, "heatmap")) {
+    return(plot_beta_heatmap(x, ...))
+  }
+}
+
 validate_beta_method <- function(method) {
   supported_methods <- "bray"
   if (!is.character(method) || length(method) != 1 ||
@@ -122,6 +153,21 @@ validate_beta_method <- function(method) {
   }
 
   method
+}
+
+validate_beta_plot_type <- function(type) {
+  supported_types <- "heatmap"
+  if (!is.character(type) || length(type) != 1 ||
+      is.na(type) || !nzchar(type) || !type %in% supported_types) {
+    stop(
+      "`type` must be one of: ",
+      paste0("\"", supported_types, "\"", collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  type
 }
 
 validate_beta_counts <- function(counts) {
@@ -183,4 +229,39 @@ beta_bray_distance <- function(counts) {
   }
 
   stats::as.dist(distances)
+}
+
+plot_beta_heatmap <- function(x, ...) {
+  distances <- as_beta_matrix(x)
+  sample_ids <- rownames(distances)
+  positions <- seq_along(sample_ids)
+
+  dots <- list(...)
+  draw_axes <- TRUE
+  if (!is.null(dots$axes)) {
+    draw_axes <- isTRUE(dots$axes)
+  }
+  dots$axes <- FALSE
+  if (is.null(dots$main)) {
+    dots$main <- paste("Beta diversity distances:", x$method)
+  }
+  if (is.null(dots$xlab)) {
+    dots$xlab <- "Sample"
+  }
+  if (is.null(dots$ylab)) {
+    dots$ylab <- "Sample"
+  }
+
+  result <- do.call(
+    graphics::image,
+    c(list(x = positions, y = positions, z = distances), dots)
+  )
+
+  if (isTRUE(draw_axes)) {
+    graphics::axis(1, at = positions, labels = sample_ids, las = 2)
+    graphics::axis(2, at = positions, labels = sample_ids, las = 2)
+    graphics::box()
+  }
+
+  invisible(result)
 }
