@@ -87,6 +87,70 @@ as_alpha_summary <- function(x) {
   x$group_summary
 }
 
+#' Plot an alpha diversity metric
+#'
+#' `microeda_alpha_plot()` draws a minimal base R barplot for one numeric alpha
+#' diversity metric across samples.
+#'
+#' @param x A `microeda_alpha` object.
+#' @param metric Optional metric column to plot. If `NULL`, the first available
+#'   alpha diversity metric is used.
+#' @param ... Additional arguments passed to [graphics::barplot()].
+#'
+#' @return The value returned by [graphics::barplot()], invisibly.
+#' @examples
+#' counts <- matrix(c(10, 0, 0, 5, 20, 0, 1, 0), nrow = 2, byrow = TRUE)
+#' rownames(counts) <- c("S1", "S2")
+#' colnames(counts) <- paste0("ASV", 1:4)
+#'
+#' alpha <- microeda_alpha(counts, taxa_are_rows = FALSE)
+#' microeda_alpha_plot(alpha)
+#' microeda_alpha_plot(alpha, metric = "shannon")
+#' @export
+microeda_alpha_plot <- function(x, metric = NULL, ...) {
+  if (!inherits(x, "microeda_alpha")) {
+    stop("`x` must be a microeda_alpha object.", call. = FALSE)
+  }
+
+  alpha_table <- x$indices
+  metric_names <- alpha_numeric_metric_names(alpha_table, group = x$group)
+
+  if (is.null(metric)) {
+    metric <- default_alpha_plot_metric(metric_names)
+  } else if (!is.character(metric) || length(metric) != 1 ||
+             is.na(metric) || !nzchar(metric)) {
+    stop("`metric` must be a single non-missing character string.", call. = FALSE)
+  }
+
+  if (!metric %in% metric_names) {
+    stop(
+      "`metric` must name a numeric alpha metric. Available metrics: ",
+      paste(metric_names, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  heights <- alpha_table[[metric]]
+  names(heights) <- alpha_table$sample_id
+
+  dots <- list(...)
+  if (is.null(dots$names.arg)) {
+    dots$names.arg <- names(heights)
+  }
+  if (is.null(dots$xlab)) {
+    dots$xlab <- "Sample"
+  }
+  if (is.null(dots$ylab)) {
+    dots$ylab <- metric
+  }
+  if (is.null(dots$main)) {
+    dots$main <- paste("Alpha diversity:", metric)
+  }
+
+  invisible(do.call(graphics::barplot, c(list(height = heights), dots)))
+}
+
 #' Compare alpha diversity indices across groups
 #'
 #' `microeda_alpha_compare()` runs exploratory group comparisons for alpha
@@ -205,6 +269,38 @@ as_alpha_pairwise <- function(x) {
   }
 
   x$pairwise
+}
+
+alpha_numeric_metric_names <- function(alpha_table, group = NULL) {
+  excluded <- c("sample_id", group)
+  metric_names <- names(alpha_table)[vapply(alpha_table, is.numeric, logical(1))]
+  setdiff(metric_names, excluded)
+}
+
+default_alpha_plot_metric <- function(metric_names) {
+  preferred <- c(
+    "observed",
+    "chao1",
+    "shannon",
+    "simpson",
+    "inverse_simpson",
+    "hill_q0",
+    "hill_q1",
+    "hill_q2",
+    "pielou_evenness",
+    "goods_coverage"
+  )
+  metric <- intersect(preferred, metric_names)[1]
+
+  if (is.na(metric)) {
+    metric <- metric_names[1]
+  }
+
+  if (is.na(metric)) {
+    stop("No numeric alpha metrics are available to plot.", call. = FALSE)
+  }
+
+  metric
 }
 
 calculate_alpha_indices <- function(counts, count_based_ok = TRUE) {
