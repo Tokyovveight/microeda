@@ -118,6 +118,7 @@ as_alpha_summary <- function(x) {
 #' microeda_alpha_plot(alpha)
 #' microeda_alpha_plot(alpha, metric = "shannon")
 #' microeda_alpha_plot(alpha, metric = "shannon", type = "boxplot")
+#' microeda_alpha_plot(alpha, metric = "shannon", type = "boxplot", group = "group")
 #' @export
 microeda_alpha_plot <- function(x,
                                 metric = NULL,

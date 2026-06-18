@@ -124,6 +124,7 @@ as_alpha_table(alpha)
 as_alpha_summary(alpha)
 microeda_alpha_plot(alpha)
 microeda_alpha_plot(alpha, type = "boxplot")
+microeda_alpha_plot(alpha, metric = "shannon", type = "boxplot", group = "group")
 ```
 
 The alpha table includes classic indices (`observed`, `chao1`, `shannon`,

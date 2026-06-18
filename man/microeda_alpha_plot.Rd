@@ -49,4 +49,5 @@ alpha <- microeda_alpha(
 microeda_alpha_plot(alpha)
 microeda_alpha_plot(alpha, metric = "shannon")
 microeda_alpha_plot(alpha, metric = "shannon", type = "boxplot")
+microeda_alpha_plot(alpha, metric = "shannon", type = "boxplot", group = "group")
 }
