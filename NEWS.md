@@ -12,3 +12,4 @@
 * Added `microeda_qc_plot()` as a minimal base R library-size QC plotting
   helper.
 * Added `type = "sparsity"` support to `microeda_qc_plot()`.
+* Added `type = "feature_abundance"` support to `microeda_qc_plot()`.
