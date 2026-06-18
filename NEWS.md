@@ -8,6 +8,7 @@
 * Added `as_qc_summary()` for compact QC display tables.
 * Added `as_qc_issues()` for tabular QC flags and observations.
 * Added `microeda_qc_report()` as a minimal text QC report skeleton.
+* Added `microeda_qc_write_report()` for writing text QC reports to files.
 * Added `include_flags` and `include_observations` content controls to
   `microeda_qc_report()`.
 * Added `microeda_qc_plot()` as a minimal base R library-size QC plotting
