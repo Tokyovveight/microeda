@@ -84,6 +84,45 @@ test_that("as_beta_matrix extracts square beta distance matrices", {
   expect_error(as_beta_matrix(data.frame()), "microeda_beta")
 })
 
+test_that("microeda_beta prints compact summaries", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "A", "B"),
+    row.names = rownames(counts)
+  )
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+  grouped_beta <- microeda_beta(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+
+  output <- capture.output(result <- withVisible(print(beta)))
+  grouped_output <- capture.output(grouped_result <- withVisible(print(grouped_beta)))
+
+  expect_false(result$visible)
+  expect_identical(result$value, beta)
+  expect_true(any(grepl("microeda_beta", output)))
+  expect_true(any(grepl("Method: +bray", output)))
+  expect_true(any(grepl("Samples: +3", output)))
+  expect_true(any(grepl("Group: +<none>", output)))
+  expect_false(grouped_result$visible)
+  expect_identical(grouped_result$value, grouped_beta)
+  expect_true(any(grepl("Group: +group", grouped_output)))
+})
+
 test_that("microeda_beta assigns zero distance to all-zero sample pairs", {
   counts <- matrix(
     0,

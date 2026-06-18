@@ -209,6 +209,16 @@ print.microeda_alpha_compare <- function(x, ...) {
   invisible(x)
 }
 
+#' @export
+print.microeda_beta <- function(x, ...) {
+  cat("<microeda_beta>\n")
+  cat("Method:   ", x$method, "\n", sep = "")
+  cat("Samples:  ", length(x$sample_ids), "\n", sep = "")
+  cat("Group:    ", if (is.null(x$group)) "<none>" else x$group, "\n", sep = "")
+  cat("Distance: ", class(x$distance)[1], " (", length(x$distance), " pairs)\n", sep = "")
+  invisible(x)
+}
+
 format_p <- function(x) {
   if (is.na(x)) {
     return("NA")

@@ -157,6 +157,7 @@ beta <- microeda_beta(
   method = "bray"
 )
 
+beta
 as_beta_dist(beta)
 as_beta_matrix(beta)
 ```

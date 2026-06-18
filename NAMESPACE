@@ -1,6 +1,7 @@
 S3method(print,microeda_report)
 S3method(print,microeda_alpha)
 S3method(print,microeda_alpha_compare)
+S3method(print,microeda_beta)
 S3method(print,microeda_qc)
 export(as_alpha_pairwise)
 export(as_alpha_summary)

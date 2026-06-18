@@ -23,3 +23,4 @@
   `microeda_beta` objects.
 * Added `as_beta_matrix()` to extract beta diversity distances as a square
   matrix.
+* Added a compact print method for `microeda_beta` objects.
