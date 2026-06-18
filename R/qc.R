@@ -189,6 +189,42 @@ as_qc_summary <- function(x, include_observations = TRUE) {
   out
 }
 
+#' Build a compact QC issues table
+#'
+#' `as_qc_issues()` combines issue-like rows from a `microeda_qc` object into a
+#' stable data frame for downstream filtering and display. It includes
+#' `x$qc_flags` and non-info rows from `x$qc_observations`.
+#'
+#' @param x A `microeda_qc` object.
+#'
+#' @return A data frame with columns `issue_type`, `issue_id`, `category`,
+#'   `severity`, `message`, `flag_id`, and `observation_id`.
+#' @examples
+#' counts <- matrix(
+#'   c(0, 0, 1, 0),
+#'   nrow = 2,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- c("S1", "S2")
+#' colnames(counts) <- c("ASV1", "ASV2")
+#'
+#' qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+#' as_qc_issues(qc)
+#' @export
+as_qc_issues <- function(x) {
+  if (!inherits(x, "microeda_qc")) {
+    stop("`x` must be a microeda_qc object.", call. = FALSE)
+  }
+
+  out <- rbind(
+    .qc_flag_issue_rows(x$qc_flags),
+    .qc_observation_issue_rows(x$qc_observations)
+  )
+
+  rownames(out) <- NULL
+  out
+}
+
 #' Build a compact text QC report
 #'
 #' `microeda_qc_report()` turns a `microeda_qc` object into a short
@@ -381,6 +417,65 @@ microeda_qc_plot <- function(x, type = "library_size", ...) {
     metric = observations$observation_id,
     value = observations$severity,
     message = observations$message,
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}
+
+.qc_empty_issues <- function() {
+  data.frame(
+    issue_type = character(),
+    issue_id = character(),
+    category = character(),
+    severity = character(),
+    message = character(),
+    flag_id = character(),
+    observation_id = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+.qc_flag_issue_rows <- function(flags) {
+  if (nrow(flags) == 0) {
+    return(.qc_empty_issues())
+  }
+
+  data.frame(
+    issue_type = "flag",
+    issue_id = flags$flag_id,
+    category = vapply(flags$flag_id, .qc_flag_category, character(1)),
+    severity = flags$severity,
+    message = flags$message,
+    flag_id = flags$flag_id,
+    observation_id = NA_character_,
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}
+
+.qc_observation_issue_rows <- function(observations) {
+  if (nrow(observations) == 0) {
+    return(.qc_empty_issues())
+  }
+
+  observations <- observations[
+    observations$severity != "info",
+    ,
+    drop = FALSE
+  ]
+
+  if (nrow(observations) == 0) {
+    return(.qc_empty_issues())
+  }
+
+  data.frame(
+    issue_type = "observation",
+    issue_id = observations$observation_id,
+    category = observations$category,
+    severity = observations$severity,
+    message = observations$message,
+    flag_id = NA_character_,
+    observation_id = observations$observation_id,
     row.names = NULL,
     stringsAsFactors = FALSE
   )

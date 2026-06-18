@@ -164,6 +164,66 @@ test_that("as_qc_summary validates inputs", {
   expect_error(as_qc_summary(qc, include_observations = c(TRUE, FALSE)), "include_observations")
 })
 
+test_that("as_qc_issues combines flags and warning observations", {
+  counts <- matrix(
+    c(
+      0, 0, 0,
+      1, 0, 2,
+      0, 3, 0
+    ),
+    nrow = 3,
+    byrow = TRUE,
+    dimnames = list(paste0("s", 1:3), paste0("f", 1:3))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  issues <- as_qc_issues(qc)
+
+  expect_s3_class(issues, "data.frame")
+  expect_named(
+    issues,
+    c(
+      "issue_type", "issue_id", "category", "severity", "message",
+      "flag_id", "observation_id"
+    )
+  )
+  expect_true("issue_type" %in% names(issues))
+  expect_true(all(c("flag", "observation") %in% issues$issue_type))
+  expect_true("zero_library_samples" %in% issues$flag_id)
+  expect_true("flag_zero_library_samples" %in% issues$observation_id)
+})
+
+test_that("as_qc_issues returns stable empty tables without issues", {
+  counts <- matrix(
+    c(
+      10, 0, 0, 5,
+      20, 0, 1, 0,
+      0,  4, 0, 0,
+      2,  3, 0, 1
+    ),
+    nrow = 4,
+    byrow = TRUE,
+    dimnames = list(paste0("s", 1:4), paste0("f", 1:4))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  issues <- as_qc_issues(qc)
+
+  expect_s3_class(issues, "data.frame")
+  expect_named(
+    issues,
+    c(
+      "issue_type", "issue_id", "category", "severity", "message",
+      "flag_id", "observation_id"
+    )
+  )
+  expect_equal(nrow(issues), 0)
+})
+
+test_that("as_qc_issues validates input", {
+  expect_error(as_qc_issues(data.frame()), "microeda_qc")
+})
+
 test_that("microeda_qc_report returns compact text for QC objects", {
   counts <- matrix(
     c(
