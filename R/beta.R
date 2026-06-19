@@ -2,10 +2,11 @@
 #'
 #' `microeda_beta()` computes a minimal sample-by-sample beta diversity distance
 #' object from microbiome counts. The current implementation supports
-#' Bray-Curtis and binary Jaccard distances.
+#' Bray-Curtis, binary Jaccard, and Hellinger-transformed Euclidean distances.
 #'
 #' @inheritParams microeda_check
-#' @param method Distance method. One of `"bray"` or `"jaccard"`.
+#' @param method Distance method. One of `"bray"`, `"jaccard"`, or
+#'   `"hellinger"`.
 #'
 #' @details
 #' Bray-Curtis distances are calculated directly as
@@ -16,6 +17,12 @@
 #' `1 - intersection / union`. Pairs where both samples have no detected
 #' features are assigned distance `0`.
 #'
+#' Hellinger distances are calculated as Euclidean distances after transforming
+#' each sample to square-root relative abundances with
+#' `sqrt(counts / rowSums(counts))`. Samples with zero library size are
+#' pragmatically transformed to all-zero vectors. Hellinger distance is not a
+#' log-ratio or compositional method.
+#'
 #' @return A `microeda_beta` object with the distance object, method, sample
 #'   IDs, optional group information, count-type diagnostics, and matched call.
 #' @examples
@@ -25,6 +32,7 @@
 #'
 #' beta <- microeda_beta(counts, taxa_are_rows = FALSE)
 #' beta_jaccard <- microeda_beta(counts, taxa_are_rows = FALSE, method = "jaccard")
+#' beta_hellinger <- microeda_beta(counts, taxa_are_rows = FALSE, method = "hellinger")
 #' as_beta_dist(beta)
 #' as_beta_matrix(beta)
 #' as_beta_samples(beta)
@@ -230,7 +238,7 @@ microeda_beta_plot <- function(x, type = "heatmap", ...) {
 }
 
 validate_beta_method <- function(method) {
-  supported_methods <- c("bray", "jaccard")
+  supported_methods <- c("bray", "jaccard", "hellinger")
   if (!is.character(method) || length(method) != 1 ||
       is.na(method) || !nzchar(method) || !method %in% supported_methods) {
     stop(
@@ -249,7 +257,11 @@ beta_distance <- function(counts, method) {
     return(beta_bray_distance(counts))
   }
 
-  beta_jaccard_distance(counts)
+  if (identical(method, "jaccard")) {
+    return(beta_jaccard_distance(counts))
+  }
+
+  beta_hellinger_distance(counts)
 }
 
 validate_beta_plot_type <- function(type) {
@@ -403,6 +415,25 @@ beta_jaccard_distance <- function(counts) {
   }
 
   stats::as.dist(distances)
+}
+
+beta_hellinger_distance <- function(counts) {
+  library_sizes <- rowSums(counts)
+  transformed <- counts
+  transformed[] <- 0
+
+  positive_libraries <- library_sizes > 0
+  if (any(positive_libraries)) {
+    relative_abundance <- sweep(
+      counts[positive_libraries, , drop = FALSE],
+      1,
+      library_sizes[positive_libraries],
+      "/"
+    )
+    transformed[positive_libraries, ] <- sqrt(relative_abundance)
+  }
+
+  stats::dist(transformed, method = "euclidean")
 }
 
 beta_ordination_coordinates <- function(points,

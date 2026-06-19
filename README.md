@@ -164,6 +164,13 @@ beta_jaccard <- microeda_beta(
   taxa_are_rows = FALSE,
   method = "jaccard"
 )
+beta_hellinger <- microeda_beta(
+  counts,
+  metadata = metadata,
+  group = "group",
+  taxa_are_rows = FALSE,
+  method = "hellinger"
+)
 
 beta_bray
 as_beta_dist(beta_bray)
@@ -175,14 +182,16 @@ ord <- microeda_beta_ordination(beta_bray)
 as_beta_coordinates(ord)
 ```
 
-`microeda_beta()` currently provides base R Bray-Curtis and Jaccard distances.
-Bray-Curtis uses abundance differences; Jaccard uses binary presence/absence.
+`microeda_beta()` currently provides base R Bray-Curtis, Jaccard, and
+Hellinger distances.
+Bray-Curtis uses abundance differences; Jaccard uses binary presence/absence;
+Hellinger uses square-root relative abundances followed by Euclidean distance.
 `as_beta_dist()` returns the stored `dist` object.
 `as_beta_matrix()` returns a square distance matrix.
 `as_beta_samples()` returns sample IDs and optional group labels.
 `microeda_beta_plot()` draws a base R distance heatmap.
 `microeda_beta_ordination()` computes PCoA with base R `stats::cmdscale()`.
-More compositional/log-ratio methods are not implemented yet.
+Compositional/log-ratio methods are not implemented yet.
 PERMANOVA is not implemented yet.
 
 For `phyloseq`, pass the object directly:

@@ -33,3 +33,5 @@
   pairwise comparison reports.
 * Added `method = "jaccard"` to `microeda_beta()` for binary presence/absence
   Jaccard distances.
+* Added `method = "hellinger"` to `microeda_beta()` for
+  Hellinger-transformed Euclidean distances.

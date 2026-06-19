@@ -25,7 +25,8 @@ group-aware recommendations.}
 Ignored for \code{phyloseq} input because the orientation is read from the
 object.}
 
-\item{method}{Distance method. One of \code{"bray"} or \code{"jaccard"}.}
+\item{method}{Distance method. One of \code{"bray"}, \code{"jaccard"}, or
+\code{"hellinger"}.}
 }
 \value{
 A \code{microeda_beta} object with the distance object, method, sample
@@ -34,7 +35,7 @@ IDs, optional group information, count-type diagnostics, and matched call.
 \description{
 \code{microeda_beta()} computes a minimal sample-by-sample beta diversity distance
 object from microbiome counts. The current implementation supports
-Bray-Curtis and binary Jaccard distances.
+Bray-Curtis, binary Jaccard, and Hellinger-transformed Euclidean distances.
 }
 \details{
 Bray-Curtis distances are calculated directly as
@@ -44,6 +45,12 @@ abundance are assigned distance \code{0}.
 Jaccard distances use binary presence/absence and are calculated as
 \code{1 - intersection / union}. Pairs where both samples have no detected
 features are assigned distance \code{0}.
+
+Hellinger distances are calculated as Euclidean distances after transforming
+each sample to square-root relative abundances with
+\code{sqrt(counts / rowSums(counts))}. Samples with zero library size are
+pragmatically transformed to all-zero vectors. Hellinger distance is not a
+log-ratio or compositional method.
 }
 \examples{
 counts <- matrix(c(1, 2, 0, 2, 1, 0), nrow = 2, byrow = TRUE)
@@ -52,6 +59,7 @@ colnames(counts) <- paste0("ASV", 1:3)
 
 beta <- microeda_beta(counts, taxa_are_rows = FALSE)
 beta_jaccard <- microeda_beta(counts, taxa_are_rows = FALSE, method = "jaccard")
+beta_hellinger <- microeda_beta(counts, taxa_are_rows = FALSE, method = "hellinger")
 as_beta_dist(beta)
 as_beta_matrix(beta)
 as_beta_samples(beta)

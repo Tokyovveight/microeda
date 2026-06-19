@@ -59,6 +59,28 @@ test_that("microeda_beta computes binary Jaccard distances from a matrix", {
   expect_equal(distance_matrix["S1", "S2"], 2 / 3)
 })
 
+test_that("microeda_beta computes Hellinger distances from a matrix", {
+  counts <- matrix(
+    c(
+      4, 0,
+      0, 9
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("S1", "S2"), c("A", "B"))
+  )
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE, method = "hellinger")
+  distance_matrix <- as_beta_matrix(beta)
+
+  expect_s3_class(beta, "microeda_beta")
+  expect_equal(beta$method, "hellinger")
+  expect_s3_class(as_beta_dist(beta), "dist")
+  expect_equal(beta$sample_ids, rownames(counts))
+  expect_equal(attr(as_beta_dist(beta), "Labels"), rownames(counts))
+  expect_equal(distance_matrix["S1", "S2"], sqrt(2))
+})
+
 test_that("as_beta_dist extracts stored beta distance objects", {
   counts <- matrix(
     c(
@@ -191,6 +213,26 @@ test_that("microeda_beta_ordination preserves Jaccard distance method", {
 
   expect_s3_class(ord, "microeda_beta_ordination")
   expect_equal(ord$distance_method, "jaccard")
+})
+
+test_that("microeda_beta_ordination preserves Hellinger distance method", {
+  counts <- matrix(
+    c(
+      4, 0,
+      0, 9,
+      1, 1
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- c("A", "B")
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE, method = "hellinger")
+  ord <- microeda_beta_ordination(beta)
+
+  expect_s3_class(ord, "microeda_beta_ordination")
+  expect_equal(ord$distance_method, "hellinger")
 })
 
 test_that("microeda_beta_ordination carries group values into coordinates", {
@@ -419,9 +461,29 @@ test_that("microeda_beta assigns zero distance to all-zero sample pairs", {
 
   beta <- microeda_beta(counts, taxa_are_rows = FALSE)
   jaccard_beta <- microeda_beta(counts, taxa_are_rows = FALSE, method = "jaccard")
+  hellinger_beta <- microeda_beta(counts, taxa_are_rows = FALSE, method = "hellinger")
 
   expect_equal(as.matrix(beta$distance)["S1", "S2"], 0)
   expect_equal(as_beta_matrix(jaccard_beta)["S1", "S2"], 0)
+  expect_equal(as_beta_matrix(hellinger_beta)["S1", "S2"], 0)
+})
+
+test_that("microeda_beta handles zero-library samples in Hellinger distances", {
+  counts <- matrix(
+    c(
+      0, 0,
+      4, 0
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("S1", "S2"), c("ASV1", "ASV2"))
+  )
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE, method = "hellinger")
+  distance <- as_beta_matrix(beta)["S1", "S2"]
+
+  expect_true(is.finite(distance))
+  expect_equal(distance, 1)
 })
 
 test_that("microeda_beta stores optional group metadata", {
@@ -467,7 +529,7 @@ test_that("microeda_beta validates method, group, and counts", {
 
   expect_error(
     microeda_beta(counts, taxa_are_rows = FALSE, method = "unknown"),
-    "bray.*jaccard"
+    "bray.*jaccard.*hellinger"
   )
   expect_error(
     microeda_beta(counts, taxa_are_rows = FALSE, method = NA_character_),
