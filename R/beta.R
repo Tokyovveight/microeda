@@ -76,6 +76,81 @@ microeda_beta <- function(x,
   )
 }
 
+#' Compare beta diversity distance methods
+#'
+#' `microeda_beta_compare()` computes multiple `microeda_beta` results from the
+#' same input so distance summaries can be compared consistently.
+#'
+#' @inheritParams microeda_beta
+#' @param methods Distance methods to compute. Supported values are `"bray"`,
+#'   `"jaccard"`, and `"hellinger"`.
+#'
+#' @return A `microeda_beta_compare` object containing named `microeda_beta`
+#'   results, method names, sample IDs, optional group information, count-type
+#'   diagnostics, and matched call.
+#' @examples
+#' counts <- matrix(
+#'   c(
+#'     1, 2, 0,
+#'     2, 1, 0,
+#'     0, 0, 3
+#'   ),
+#'   nrow = 3,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- c("S1", "S2", "S3")
+#' colnames(counts) <- paste0("ASV", 1:3)
+#'
+#' beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+#' as_beta_compare_summary(beta_cmp)
+#' @export
+microeda_beta_compare <- function(x,
+                                  metadata = NULL,
+                                  group = NULL,
+                                  taxa_are_rows = TRUE,
+                                  methods = c("bray", "jaccard", "hellinger")) {
+  methods <- validate_beta_compare_methods(methods)
+  results <- lapply(methods, function(method) {
+    microeda_beta(
+      x = x,
+      metadata = metadata,
+      group = group,
+      taxa_are_rows = taxa_are_rows,
+      method = method
+    )
+  })
+  names(results) <- methods
+
+  first_result <- results[[1]]
+  structure(
+    list(
+      results = results,
+      methods = methods,
+      sample_ids = first_result$sample_ids,
+      group = first_result$group,
+      group_values = first_result$group_values,
+      count_type = first_result$count_type,
+      call = match.call()
+    ),
+    class = "microeda_beta_compare"
+  )
+}
+
+#' Summarize beta diversity method comparisons
+#'
+#' @param x A `microeda_beta_compare` object.
+#'
+#' @return A data frame with one row per method and distance summary columns.
+#' @export
+as_beta_compare_summary <- function(x) {
+  if (!inherits(x, "microeda_beta_compare")) {
+    stop("`x` must be a microeda_beta_compare object.", call. = FALSE)
+  }
+
+  summaries <- lapply(x$results, beta_compare_summary_row)
+  do.call(rbind, summaries)
+}
+
 #' Extract beta diversity distances
 #'
 #' @param x A `microeda_beta` object.
@@ -237,8 +312,12 @@ microeda_beta_plot <- function(x, type = "heatmap", ...) {
   }
 }
 
+supported_beta_methods <- function() {
+  c("bray", "jaccard", "hellinger")
+}
+
 validate_beta_method <- function(method) {
-  supported_methods <- c("bray", "jaccard", "hellinger")
+  supported_methods <- supported_beta_methods()
   if (!is.character(method) || length(method) != 1 ||
       is.na(method) || !nzchar(method) || !method %in% supported_methods) {
     stop(
@@ -250,6 +329,26 @@ validate_beta_method <- function(method) {
   }
 
   method
+}
+
+validate_beta_compare_methods <- function(methods) {
+  supported_methods <- supported_beta_methods()
+  if (!is.character(methods) || length(methods) < 1 ||
+      any(is.na(methods)) || any(!nzchar(methods)) ||
+      any(!methods %in% supported_methods)) {
+    stop(
+      "`methods` must contain one or more supported methods: ",
+      paste0("\"", supported_methods, "\"", collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  if (anyDuplicated(methods)) {
+    stop("`methods` cannot contain duplicate values.", call. = FALSE)
+  }
+
+  methods
 }
 
 beta_distance <- function(counts, method) {
@@ -434,6 +533,29 @@ beta_hellinger_distance <- function(counts) {
   }
 
   stats::dist(transformed, method = "euclidean")
+}
+
+beta_compare_summary_row <- function(x) {
+  distances <- as.numeric(as_beta_dist(x))
+  if (length(distances) == 0) {
+    min_distance <- NA_real_
+    median_distance <- NA_real_
+    max_distance <- NA_real_
+  } else {
+    min_distance <- min(distances)
+    median_distance <- stats::median(distances)
+    max_distance <- max(distances)
+  }
+
+  data.frame(
+    method = x$method,
+    n_samples = length(x$sample_ids),
+    n_pairs = length(distances),
+    min_distance = min_distance,
+    median_distance = median_distance,
+    max_distance = max_distance,
+    stringsAsFactors = FALSE
+  )
 }
 
 beta_ordination_coordinates <- function(points,

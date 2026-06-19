@@ -220,6 +220,16 @@ print.microeda_beta <- function(x, ...) {
 }
 
 #' @export
+print.microeda_beta_compare <- function(x, ...) {
+  cat("<microeda_beta_compare>\n")
+  cat("Methods: ", paste(x$methods, collapse = ", "), "\n", sep = "")
+  cat("Samples: ", length(x$sample_ids), "\n", sep = "")
+  cat("Group:   ", if (is.null(x$group)) "<none>" else x$group, "\n", sep = "")
+  cat("\nUse as_beta_compare_summary() to inspect distance summaries.\n")
+  invisible(x)
+}
+
+#' @export
 print.microeda_beta_ordination <- function(x, ...) {
   cat("<microeda_beta_ordination>\n")
   cat("Method:          ", x$method, "\n", sep = "")

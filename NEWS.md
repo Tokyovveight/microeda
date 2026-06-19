@@ -35,3 +35,5 @@
   Jaccard distances.
 * Added `method = "hellinger"` to `microeda_beta()` for
   Hellinger-transformed Euclidean distances.
+* Added `microeda_beta_compare()` and `as_beta_compare_summary()` for compact
+  multi-method beta diversity comparison.
