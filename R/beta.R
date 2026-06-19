@@ -151,6 +151,30 @@ as_beta_compare_summary <- function(x) {
   do.call(rbind, summaries)
 }
 
+#' Extract beta diversity method comparison distances
+#'
+#' @param x A `microeda_beta_compare` object.
+#'
+#' @return A data frame with one row per method and sample pair. Group columns
+#'   are included when the comparison object has group metadata.
+#' @export
+as_beta_compare_distances <- function(x) {
+  if (!inherits(x, "microeda_beta_compare")) {
+    stop("`x` must be a microeda_beta_compare object.", call. = FALSE)
+  }
+
+  rows <- lapply(x$methods, function(method) {
+    beta_compare_distance_rows(
+      x$results[[method]],
+      group = x$group,
+      group_values = x$group_values
+    )
+  })
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
+}
+
 #' Extract beta diversity distances
 #'
 #' @param x A `microeda_beta` object.
@@ -556,6 +580,50 @@ beta_compare_summary_row <- function(x) {
     max_distance = max_distance,
     stringsAsFactors = FALSE
   )
+}
+
+beta_compare_distance_rows <- function(x, group = NULL, group_values = NULL) {
+  distance <- as_beta_dist(x)
+  distances <- as.numeric(distance)
+  sample_pairs <- beta_dist_sample_pairs(distance)
+  out <- data.frame(
+    method = rep(x$method, nrow(sample_pairs)),
+    sample_1 = sample_pairs[, 1],
+    sample_2 = sample_pairs[, 2],
+    stringsAsFactors = FALSE
+  )
+
+  if (!is.null(group)) {
+    group_1 <- unname(as.character(group_values[out$sample_1]))
+    group_2 <- unname(as.character(group_values[out$sample_2]))
+    out$group_1 <- group_1
+    out$group_2 <- group_2
+    out$comparison <- beta_group_comparison(group_1, group_2)
+  }
+
+  out$distance <- distances
+  out
+}
+
+beta_dist_sample_pairs <- function(distance) {
+  labels <- attr(distance, "Labels")
+  if (length(distance) == 0) {
+    return(matrix(
+      character(),
+      ncol = 2,
+      dimnames = list(NULL, c("sample_1", "sample_2"))
+    ))
+  }
+
+  pairs <- t(utils::combn(labels, 2))
+  colnames(pairs) <- c("sample_1", "sample_2")
+  pairs
+}
+
+beta_group_comparison <- function(group_1, group_2) {
+  comparison <- ifelse(group_1 == group_2, "within", "between")
+  comparison[is.na(group_1) | is.na(group_2)] <- NA_character_
+  unname(comparison)
 }
 
 beta_ordination_coordinates <- function(points,

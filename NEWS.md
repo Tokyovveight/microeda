@@ -37,3 +37,5 @@
   Hellinger-transformed Euclidean distances.
 * Added `microeda_beta_compare()` and `as_beta_compare_summary()` for compact
   multi-method beta diversity comparison.
+* Added `as_beta_compare_distances()` for long-form pairwise distances from
+  beta method comparisons.

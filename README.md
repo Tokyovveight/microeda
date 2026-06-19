@@ -187,6 +187,7 @@ beta_cmp <- microeda_beta_compare(
 
 beta_cmp
 as_beta_compare_summary(beta_cmp)
+as_beta_compare_distances(beta_cmp)
 
 ord <- microeda_beta_ordination(beta_bray)
 as_beta_coordinates(ord)
@@ -202,6 +203,8 @@ Hellinger uses square-root relative abundances followed by Euclidean distance.
 `microeda_beta_plot()` draws a base R distance heatmap.
 `microeda_beta_compare()` compares distance summaries across the currently
 implemented beta methods.
+`as_beta_compare_distances()` returns long-form pairwise distances for
+downstream summaries, reports, and plots.
 `microeda_beta_ordination()` computes PCoA with base R `stats::cmdscale()`.
 Compositional/log-ratio methods are not implemented yet.
 PERMANOVA is not implemented yet.
