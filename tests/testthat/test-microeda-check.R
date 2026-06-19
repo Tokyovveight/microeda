@@ -334,3 +334,116 @@ test_that("microeda_alpha_compare runs omnibus and pairwise tests", {
   expect_true(all(c("p_value", "p_value_adjusted") %in% names(as_alpha_tests(comparison))))
   expect_true(nrow(as_alpha_pairwise(comparison)) > 0)
 })
+
+test_that("microeda_alpha_pairwise_report returns grouped compact text", {
+  counts <- matrix(
+    c(
+      10, 0, 0, 5,
+      20, 0, 1, 0,
+      0, 4, 0, 0,
+      2, 3, 0, 1,
+      10, 8, 7, 6,
+      1, 0, 0, 0
+    ),
+    nrow = 6,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(6))
+  colnames(counts) <- paste0("ASV", seq_len(4))
+  metadata <- data.frame(
+    group = c("A", "A", "B", "B", "C", "C"),
+    row.names = rownames(counts)
+  )
+
+  alpha <- microeda_alpha(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  comparison <- microeda_alpha_compare(
+    alpha,
+    group = "group",
+    indices = c("observed", "hill_q1")
+  )
+
+  report <- microeda_alpha_pairwise_report(comparison)
+  section_count <- gregexpr(
+    "Pairwise comparisons for:",
+    report,
+    fixed = TRUE
+  )[[1]]
+
+  expect_type(report, "character")
+  expect_length(report, 1)
+  expect_equal(length(section_count), 2)
+  expect_match(report, "Pairwise comparisons for: observed", fixed = TRUE)
+  expect_match(report, "Pairwise comparisons for: hill_q1", fixed = TRUE)
+  expect_match(
+    report,
+    "Test: Wilcoxon rank sum test | p-adjust: BH",
+    fixed = TRUE
+  )
+  expect_false(grepl("p_adjust_method", report, fixed = TRUE))
+  expect_false(grepl("method", report, fixed = TRUE))
+  expect_true(all(c(
+    "group1",
+    "group2",
+    "n1",
+    "n2",
+    "p",
+    "p.adj",
+    "p.adj.signif"
+  ) %in% strsplit(report, "\\s+")[[1]]))
+})
+
+test_that("microeda_alpha_pairwise_report assigns adjusted p-value stars", {
+  pairwise <- data.frame(
+    index = rep("shannon", 6),
+    group_1 = paste0("A", seq_len(6)),
+    group_2 = paste0("B", seq_len(6)),
+    n_1 = rep(2, 6),
+    n_2 = rep(2, 6),
+    median_1 = rep(1, 6),
+    median_2 = rep(2, 6),
+    median_difference = rep(-1, 6),
+    p_value = c(0.0001, 0.001, 0.01, 0.05, 0.2, NA_real_),
+    p_value_adjusted = c(0.0001, 0.001, 0.01, 0.05, 0.2, NA_real_),
+    p_adjust_method = "BH",
+    method = "Wilcoxon rank sum test",
+    stringsAsFactors = FALSE
+  )
+  comparison <- structure(
+    list(pairwise = pairwise),
+    class = "microeda_alpha_compare"
+  )
+
+  report <- microeda_alpha_pairwise_report(comparison)
+  lines <- strsplit(report, "\n", fixed = TRUE)[[1]]
+
+  expect_true(any(grepl("A1\\s+B1.*\\*\\*\\*\\*\\s*$", lines)))
+  expect_true(any(grepl("A2\\s+B2.*\\*\\*\\*\\s*$", lines)))
+  expect_true(any(grepl("A3\\s+B3.*\\*\\*\\s*$", lines)))
+  expect_true(any(grepl("A4\\s+B4.*\\*\\s*$", lines)))
+  expect_true(any(grepl("A5\\s+B5.*ns\\s*$", lines)))
+  expect_true(any(grepl("A6\\s+B6.*<NA>\\s*$", lines)))
+})
+
+test_that("microeda_alpha_pairwise_report handles empty pairwise comparisons", {
+  comparison <- structure(
+    list(pairwise = data.frame()),
+    class = "microeda_alpha_compare"
+  )
+
+  expect_identical(
+    microeda_alpha_pairwise_report(comparison),
+    "No alpha pairwise comparisons are available."
+  )
+})
+
+test_that("microeda_alpha_pairwise_report validates input", {
+  expect_error(
+    microeda_alpha_pairwise_report(data.frame()),
+    "microeda_alpha_compare"
+  )
+})

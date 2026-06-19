@@ -324,6 +324,57 @@ as_alpha_pairwise <- function(x) {
   x$pairwise
 }
 
+#' Build a compact alpha pairwise comparison report
+#'
+#' `microeda_alpha_pairwise_report()` turns the pairwise comparison table from a
+#' `microeda_alpha_compare` object into a compact text report grouped by alpha
+#' diversity index.
+#'
+#' @param x A `microeda_alpha_compare` object.
+#'
+#' @return A single character string.
+#' @examples
+#' counts <- matrix(
+#'   c(
+#'     10, 0, 0, 5,
+#'     20, 0, 1, 0,
+#'     0, 4, 0, 0,
+#'     2, 3, 0, 1
+#'   ),
+#'   nrow = 4,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- paste0("S", 1:4)
+#' colnames(counts) <- paste0("ASV", 1:4)
+#' metadata <- data.frame(group = c("A", "A", "B", "B"), row.names = rownames(counts))
+#'
+#' alpha <- microeda_alpha(
+#'   counts,
+#'   metadata = metadata,
+#'   group = "group",
+#'   taxa_are_rows = FALSE
+#' )
+#' alpha_cmp <- microeda_alpha_compare(alpha, group = "group", indices = "shannon")
+#' microeda_alpha_pairwise_report(alpha_cmp)
+#' @export
+microeda_alpha_pairwise_report <- function(x) {
+  if (!inherits(x, "microeda_alpha_compare")) {
+    stop("`x` must be a microeda_alpha_compare object.", call. = FALSE)
+  }
+
+  pairwise <- as_alpha_pairwise(x)
+  if (nrow(pairwise) == 0) {
+    return("No alpha pairwise comparisons are available.")
+  }
+
+  sections <- lapply(unique(pairwise$index), function(index) {
+    alpha_pairwise_report_section(pairwise[pairwise$index == index, , drop = FALSE])
+  })
+  section_text <- vapply(sections, paste, character(1), collapse = "\n")
+
+  paste(section_text, collapse = "\n\n")
+}
+
 validate_alpha_plot_type <- function(type) {
   supported_types <- c("bar", "boxplot")
   if (identical(type, supported_types)) {
@@ -598,6 +649,51 @@ resolve_alpha_group <- function(alpha_table, group = NULL, stored_group = NULL) 
   }
 
   group
+}
+
+alpha_pairwise_report_section <- function(pairwise) {
+  index <- pairwise$index[1]
+  method <- unique(pairwise$method)
+  p_adjust_method <- unique(pairwise$p_adjust_method)
+  separator <- "========================================="
+  table <- alpha_pairwise_report_table(pairwise)
+  table_lines <- utils::capture.output(print(
+    table,
+    row.names = FALSE,
+    right = FALSE
+  ))
+
+  c(
+    separator,
+    paste("Pairwise comparisons for:", index),
+    paste0("Test: ", method[1], " | p-adjust: ", p_adjust_method[1]),
+    separator,
+    table_lines
+  )
+}
+
+alpha_pairwise_report_table <- function(pairwise) {
+  data.frame(
+    group1 = pairwise$group_1,
+    group2 = pairwise$group_2,
+    n1 = pairwise$n_1,
+    n2 = pairwise$n_2,
+    p = pairwise$p_value,
+    p.adj = pairwise$p_value_adjusted,
+    p.adj.signif = alpha_pairwise_p_significance(pairwise$p_value_adjusted),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+}
+
+alpha_pairwise_p_significance <- function(p) {
+  out <- rep("ns", length(p))
+  out[is.na(p)] <- NA_character_
+  out[!is.na(p) & p <= 0.05] <- "*"
+  out[!is.na(p) & p <= 0.01] <- "**"
+  out[!is.na(p) & p <= 0.001] <- "***"
+  out[!is.na(p) & p <= 0.0001] <- "****"
+  out
 }
 
 validate_alpha_indices <- function(alpha_table, indices) {

@@ -139,11 +139,12 @@ Group comparisons are intentionally exploratory and include depth/coverage
 diagnostics:
 
 ```r
-alpha_cmp <- microeda_alpha_compare(alpha)
+alpha_cmp <- microeda_alpha_compare(alpha, group = "group")
 
 alpha_cmp
 as_alpha_tests(alpha_cmp)
 as_alpha_pairwise(alpha_cmp)
+microeda_alpha_pairwise_report(alpha_cmp)
 ```
 
 ## Beta diversity

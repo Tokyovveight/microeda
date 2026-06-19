@@ -29,3 +29,5 @@
 * Added `microeda_beta_plot()` for base R heatmaps of beta diversity distances.
 * Added `microeda_beta_ordination()` and `as_beta_coordinates()` for initial
   PCoA ordination of beta diversity distances.
+* Added `microeda_alpha_pairwise_report()` for compact grouped alpha diversity
+  pairwise comparison reports.
