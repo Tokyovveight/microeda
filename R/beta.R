@@ -1,16 +1,20 @@
 #' Compute beta diversity distances
 #'
 #' `microeda_beta()` computes a minimal sample-by-sample beta diversity distance
-#' object from microbiome counts. The first implementation supports
-#' Bray-Curtis distances only.
+#' object from microbiome counts. The current implementation supports
+#' Bray-Curtis and binary Jaccard distances.
 #'
 #' @inheritParams microeda_check
-#' @param method Distance method. Only `"bray"` is currently supported.
+#' @param method Distance method. One of `"bray"` or `"jaccard"`.
 #'
 #' @details
 #' Bray-Curtis distances are calculated directly as
 #' `sum(abs(a - b)) / sum(a + b)`. Pairs where both samples have zero total
 #' abundance are assigned distance `0`.
+#'
+#' Jaccard distances use binary presence/absence and are calculated as
+#' `1 - intersection / union`. Pairs where both samples have no detected
+#' features are assigned distance `0`.
 #'
 #' @return A `microeda_beta` object with the distance object, method, sample
 #'   IDs, optional group information, count-type diagnostics, and matched call.
@@ -20,6 +24,7 @@
 #' colnames(counts) <- paste0("ASV", 1:3)
 #'
 #' beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+#' beta_jaccard <- microeda_beta(counts, taxa_are_rows = FALSE, method = "jaccard")
 #' as_beta_dist(beta)
 #' as_beta_matrix(beta)
 #' as_beta_samples(beta)
@@ -51,7 +56,7 @@ microeda_beta <- function(x,
 
   structure(
     list(
-      distance = beta_bray_distance(counts),
+      distance = beta_distance(counts, method = method),
       method = method,
       sample_ids = sample_ids,
       group = group,
@@ -225,7 +230,7 @@ microeda_beta_plot <- function(x, type = "heatmap", ...) {
 }
 
 validate_beta_method <- function(method) {
-  supported_methods <- "bray"
+  supported_methods <- c("bray", "jaccard")
   if (!is.character(method) || length(method) != 1 ||
       is.na(method) || !nzchar(method) || !method %in% supported_methods) {
     stop(
@@ -237,6 +242,14 @@ validate_beta_method <- function(method) {
   }
 
   method
+}
+
+beta_distance <- function(counts, method) {
+  if (identical(method, "bray")) {
+    return(beta_bray_distance(counts))
+  }
+
+  beta_jaccard_distance(counts)
 }
 
 validate_beta_plot_type <- function(type) {
@@ -354,6 +367,34 @@ beta_bray_distance <- function(counts) {
         distance <- 0
         if (denominator > 0) {
           distance <- sum(abs(counts[i, ] - counts[j, ])) / denominator
+        }
+        distances[i, j] <- distance
+        distances[j, i] <- distance
+      }
+    }
+  }
+
+  stats::as.dist(distances)
+}
+
+beta_jaccard_distance <- function(counts) {
+  presence <- counts > 0
+  n_samples <- nrow(presence)
+  distances <- matrix(
+    0,
+    nrow = n_samples,
+    ncol = n_samples,
+    dimnames = list(rownames(counts), rownames(counts))
+  )
+
+  if (n_samples > 1) {
+    for (i in seq_len(n_samples - 1)) {
+      for (j in seq.int(i + 1, n_samples)) {
+        union <- sum(presence[i, ] | presence[j, ])
+        distance <- 0
+        if (union > 0) {
+          intersection <- sum(presence[i, ] & presence[j, ])
+          distance <- 1 - intersection / union
         }
         distances[i, j] <- distance
         distances[j, i] <- distance

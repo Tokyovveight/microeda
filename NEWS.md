@@ -31,3 +31,5 @@
   PCoA ordination of beta diversity distances.
 * Added `microeda_alpha_pairwise_report()` for compact grouped alpha diversity
   pairwise comparison reports.
+* Added `method = "jaccard"` to `microeda_beta()` for binary presence/absence
+  Jaccard distances.

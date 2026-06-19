@@ -150,31 +150,39 @@ microeda_alpha_pairwise_report(alpha_cmp)
 ## Beta diversity
 
 ```r
-beta <- microeda_beta(
+beta_bray <- microeda_beta(
   counts,
   metadata = metadata,
   group = "group",
   taxa_are_rows = FALSE,
   method = "bray"
 )
+beta_jaccard <- microeda_beta(
+  counts,
+  metadata = metadata,
+  group = "group",
+  taxa_are_rows = FALSE,
+  method = "jaccard"
+)
 
-beta
-as_beta_dist(beta)
-as_beta_matrix(beta)
-as_beta_samples(beta)
-microeda_beta_plot(beta)
+beta_bray
+as_beta_dist(beta_bray)
+as_beta_matrix(beta_bray)
+as_beta_samples(beta_bray)
+microeda_beta_plot(beta_bray)
 
-ord <- microeda_beta_ordination(beta)
+ord <- microeda_beta_ordination(beta_bray)
 as_beta_coordinates(ord)
 ```
 
-`microeda_beta()` currently provides a base R Bray-Curtis distance helper only;
+`microeda_beta()` currently provides base R Bray-Curtis and Jaccard distances.
+Bray-Curtis uses abundance differences; Jaccard uses binary presence/absence.
 `as_beta_dist()` returns the stored `dist` object.
 `as_beta_matrix()` returns a square distance matrix.
 `as_beta_samples()` returns sample IDs and optional group labels.
 `microeda_beta_plot()` draws a base R distance heatmap.
 `microeda_beta_ordination()` computes PCoA with base R `stats::cmdscale()`.
-Bray-Curtis remains the only distance currently implemented.
+More compositional/log-ratio methods are not implemented yet.
 PERMANOVA is not implemented yet.
 
 For `phyloseq`, pass the object directly:

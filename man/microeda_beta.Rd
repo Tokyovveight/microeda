@@ -25,7 +25,7 @@ group-aware recommendations.}
 Ignored for \code{phyloseq} input because the orientation is read from the
 object.}
 
-\item{method}{Distance method. Only \code{"bray"} is currently supported.}
+\item{method}{Distance method. One of \code{"bray"} or \code{"jaccard"}.}
 }
 \value{
 A \code{microeda_beta} object with the distance object, method, sample
@@ -33,13 +33,17 @@ IDs, optional group information, count-type diagnostics, and matched call.
 }
 \description{
 \code{microeda_beta()} computes a minimal sample-by-sample beta diversity distance
-object from microbiome counts. The first implementation supports
-Bray-Curtis distances only.
+object from microbiome counts. The current implementation supports
+Bray-Curtis and binary Jaccard distances.
 }
 \details{
 Bray-Curtis distances are calculated directly as
 \code{sum(abs(a - b)) / sum(a + b)}. Pairs where both samples have zero total
 abundance are assigned distance \code{0}.
+
+Jaccard distances use binary presence/absence and are calculated as
+\code{1 - intersection / union}. Pairs where both samples have no detected
+features are assigned distance \code{0}.
 }
 \examples{
 counts <- matrix(c(1, 2, 0, 2, 1, 0), nrow = 2, byrow = TRUE)
@@ -47,6 +51,7 @@ rownames(counts) <- c("S1", "S2")
 colnames(counts) <- paste0("ASV", 1:3)
 
 beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+beta_jaccard <- microeda_beta(counts, taxa_are_rows = FALSE, method = "jaccard")
 as_beta_dist(beta)
 as_beta_matrix(beta)
 as_beta_samples(beta)

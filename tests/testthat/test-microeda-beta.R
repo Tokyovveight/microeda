@@ -37,6 +37,28 @@ test_that("microeda_beta accepts explicit Bray-Curtis method", {
   expect_equal(beta$method, "bray")
 })
 
+test_that("microeda_beta computes binary Jaccard distances from a matrix", {
+  counts <- matrix(
+    c(
+      1, 1, 0,
+      1, 0, 1
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("S1", "S2"), c("A", "B", "C"))
+  )
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE, method = "jaccard")
+  distance_matrix <- as_beta_matrix(beta)
+
+  expect_s3_class(beta, "microeda_beta")
+  expect_equal(beta$method, "jaccard")
+  expect_s3_class(as_beta_dist(beta), "dist")
+  expect_equal(beta$sample_ids, rownames(counts))
+  expect_equal(attr(as_beta_dist(beta), "Labels"), rownames(counts))
+  expect_equal(distance_matrix["S1", "S2"], 2 / 3)
+})
+
 test_that("as_beta_dist extracts stored beta distance objects", {
   counts <- matrix(
     c(
@@ -149,6 +171,26 @@ test_that("microeda_beta_ordination computes PCoA coordinates", {
   expect_equal(ord$sample_ids, beta$sample_ids)
   expect_type(ord$eigenvalues, "double")
   expect_type(ord$variance_explained, "double")
+})
+
+test_that("microeda_beta_ordination preserves Jaccard distance method", {
+  counts <- matrix(
+    c(
+      1, 1, 0,
+      1, 0, 1,
+      0, 1, 1
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- c("A", "B", "C")
+
+  beta <- microeda_beta(counts, taxa_are_rows = FALSE, method = "jaccard")
+  ord <- microeda_beta_ordination(beta)
+
+  expect_s3_class(ord, "microeda_beta_ordination")
+  expect_equal(ord$distance_method, "jaccard")
 })
 
 test_that("microeda_beta_ordination carries group values into coordinates", {
@@ -376,8 +418,10 @@ test_that("microeda_beta assigns zero distance to all-zero sample pairs", {
   )
 
   beta <- microeda_beta(counts, taxa_are_rows = FALSE)
+  jaccard_beta <- microeda_beta(counts, taxa_are_rows = FALSE, method = "jaccard")
 
   expect_equal(as.matrix(beta$distance)["S1", "S2"], 0)
+  expect_equal(as_beta_matrix(jaccard_beta)["S1", "S2"], 0)
 })
 
 test_that("microeda_beta stores optional group metadata", {
@@ -422,8 +466,8 @@ test_that("microeda_beta validates method, group, and counts", {
   )
 
   expect_error(
-    microeda_beta(counts, taxa_are_rows = FALSE, method = "jaccard"),
-    "method"
+    microeda_beta(counts, taxa_are_rows = FALSE, method = "unknown"),
+    "bray.*jaccard"
   )
   expect_error(
     microeda_beta(counts, taxa_are_rows = FALSE, method = NA_character_),
