@@ -43,3 +43,6 @@
   distance summaries.
 * Added `microeda_beta_compare_report()` for compact text reports of beta
   method comparisons.
+* Added `microeda_beta_compare_ordination()` and
+  `as_beta_compare_coordinates()` for side-by-side PCoA coordinates across beta
+  methods.

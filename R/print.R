@@ -230,6 +230,18 @@ print.microeda_beta_compare <- function(x, ...) {
 }
 
 #' @export
+print.microeda_beta_compare_ordination <- function(x, ...) {
+  cat("<microeda_beta_compare_ordination>\n")
+  cat("Methods:            ", paste(x$methods, collapse = ", "), "\n", sep = "")
+  cat("Ordination method:  ", x$ordination_method, "\n", sep = "")
+  cat("Dimensions:         ", x$dimensions, "\n", sep = "")
+  cat("Samples:            ", length(x$sample_ids), "\n", sep = "")
+  cat("Group:              ", if (is.null(x$group)) "<none>" else x$group, "\n", sep = "")
+  cat("\nUse as_beta_compare_coordinates() to inspect coordinates.\n")
+  invisible(x)
+}
+
+#' @export
 print.microeda_beta_ordination <- function(x, ...) {
   cat("<microeda_beta_ordination>\n")
   cat("Method:          ", x$method, "\n", sep = "")
