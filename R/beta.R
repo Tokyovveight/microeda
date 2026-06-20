@@ -220,6 +220,75 @@ as_beta_compare_group_summary <- function(x) {
   out
 }
 
+#' Build a compact beta diversity method comparison report
+#'
+#' `microeda_beta_compare_report()` combines beta method summaries into a
+#' compact text report. It does not run PERMANOVA or make formal method
+#' recommendations.
+#'
+#' @param x A `microeda_beta_compare` object.
+#'
+#' @return A single character string.
+#' @examples
+#' counts <- matrix(
+#'   c(
+#'     1, 2, 0,
+#'     2, 1, 0,
+#'     0, 0, 3
+#'   ),
+#'   nrow = 3,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- c("S1", "S2", "S3")
+#' colnames(counts) <- paste0("ASV", 1:3)
+#'
+#' beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+#' microeda_beta_compare_report(beta_cmp)
+#' @export
+microeda_beta_compare_report <- function(x) {
+  if (!inherits(x, "microeda_beta_compare")) {
+    stop("`x` must be a microeda_beta_compare object.", call. = FALSE)
+  }
+
+  separator <- "========================================="
+  lines <- c(
+    separator,
+    "Beta diversity method comparison",
+    separator,
+    "",
+    paste0("Methods: ", paste(x$methods, collapse = ", ")),
+    paste0("Samples: ", length(x$sample_ids)),
+    paste0("Group: ", if (is.null(x$group)) "<none>" else x$group),
+    "",
+    "Method-level distance summary",
+    beta_compare_report_table(as_beta_compare_summary(x)),
+    "",
+    "Group-level distance summary"
+  )
+
+  if (is.null(x$group)) {
+    lines <- c(
+      lines,
+      "Group-level distance summary unavailable: no group metadata supplied."
+    )
+  } else {
+    lines <- c(lines, beta_compare_report_table(as_beta_compare_group_summary(x)))
+  }
+
+  lines <- c(
+    lines,
+    "",
+    "Notes",
+    "- Bray-Curtis: abundance-sensitive distance.",
+    "- Jaccard: binary presence/absence distance.",
+    "- Hellinger: square-root relative abundance transform followed by Euclidean distance.",
+    "- PERMANOVA is not implemented in this report.",
+    "- Formal method recommendation is not implemented yet."
+  )
+
+  paste(lines, collapse = "\n")
+}
+
 #' Extract beta diversity distances
 #'
 #' @param x A `microeda_beta` object.
@@ -693,6 +762,10 @@ beta_empty_group_summary <- function() {
     max_distance = numeric(),
     stringsAsFactors = FALSE
   )
+}
+
+beta_compare_report_table <- function(x) {
+  utils::capture.output(print(x, row.names = FALSE, right = FALSE))
 }
 
 beta_ordination_coordinates <- function(points,

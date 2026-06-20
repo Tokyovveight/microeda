@@ -471,6 +471,78 @@ test_that("as_beta_compare_group_summary returns stable empty summaries", {
   expect_equal(nrow(summary), 0L)
 })
 
+test_that("microeda_beta_compare_report returns compact grouped reports", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "B", "A"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  output <- capture.output(report <- microeda_beta_compare_report(beta_cmp))
+
+  expect_identical(output, character())
+  expect_type(report, "character")
+  expect_length(report, 1)
+  expect_match(report, "Beta diversity method comparison", fixed = TRUE)
+  expect_match(report, "Methods: bray, jaccard, hellinger", fixed = TRUE)
+  expect_match(report, "Samples: 3", fixed = TRUE)
+  expect_match(report, "Group: group", fixed = TRUE)
+  expect_match(report, "Method-level distance summary", fixed = TRUE)
+  expect_match(report, "Group-level distance summary", fixed = TRUE)
+  expect_match(report, "Bray-Curtis: abundance-sensitive distance.", fixed = TRUE)
+  expect_match(report, "Jaccard: binary presence/absence distance.", fixed = TRUE)
+  expect_match(report, "Hellinger: square-root relative abundance", fixed = TRUE)
+  expect_match(report, "PERMANOVA is not implemented", fixed = TRUE)
+  expect_match(report, "Formal method recommendation is not implemented yet.", fixed = TRUE)
+})
+
+test_that("microeda_beta_compare_report handles ungrouped comparisons", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+  report <- microeda_beta_compare_report(beta_cmp)
+
+  expect_match(report, "Group: <none>", fixed = TRUE)
+  expect_match(
+    report,
+    "Group-level distance summary unavailable: no group metadata supplied.",
+    fixed = TRUE
+  )
+})
+
+test_that("microeda_beta_compare_report validates input", {
+  expect_error(
+    microeda_beta_compare_report(data.frame()),
+    "microeda_beta_compare"
+  )
+})
+
 test_that("microeda_beta_compare prints compact summaries", {
   counts <- matrix(
     c(

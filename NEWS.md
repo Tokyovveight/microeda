@@ -41,3 +41,5 @@
   beta method comparisons.
 * Added `as_beta_compare_group_summary()` for within- and between-group beta
   distance summaries.
+* Added `microeda_beta_compare_report()` for compact text reports of beta
+  method comparisons.

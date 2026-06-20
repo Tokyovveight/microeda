@@ -189,6 +189,7 @@ beta_cmp
 as_beta_compare_summary(beta_cmp)
 as_beta_compare_distances(beta_cmp)
 as_beta_compare_group_summary(beta_cmp)
+cat(microeda_beta_compare_report(beta_cmp))
 
 ord <- microeda_beta_ordination(beta_bray)
 as_beta_coordinates(ord)
@@ -208,6 +209,8 @@ implemented beta methods.
 downstream summaries, reports, and plots.
 `as_beta_compare_group_summary()` summarizes within- and between-group
 distances for grouped comparisons.
+`microeda_beta_compare_report()` returns a compact text report combining
+method-level and grouped beta distance summaries.
 `microeda_beta_ordination()` computes PCoA with base R `stats::cmdscale()`.
 Compositional/log-ratio methods are not implemented yet.
 PERMANOVA is not implemented yet.
