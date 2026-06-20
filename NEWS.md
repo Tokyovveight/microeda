@@ -46,3 +46,5 @@
 * Added `microeda_beta_compare_ordination()` and
   `as_beta_compare_coordinates()` for side-by-side PCoA coordinates across beta
   methods.
+* Added `as_beta_compare_distance_correlations()` for descriptive correlations
+  between beta distance methods.

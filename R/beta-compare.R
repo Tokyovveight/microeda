@@ -97,6 +97,63 @@ as_beta_compare_distances <- function(x) {
   out
 }
 
+#' Correlate beta diversity distance methods
+#'
+#' `as_beta_compare_distance_correlations()` computes descriptive correlations
+#' between pairwise distance vectors from a `microeda_beta_compare` object.
+#'
+#' Distance-vector correlations are descriptive only. They do not identify the
+#' correct method and do not replace PERMANOVA, dispersion checks, or
+#' compositional diagnostics.
+#'
+#' @param x A `microeda_beta_compare` object.
+#' @param correlation_method Correlation method. Supported values are
+#'   `"pearson"`, `"spearman"`, and `"kendall"`.
+#'
+#' @return A data frame with one row per method pair.
+#' @examples
+#' counts <- matrix(
+#'   c(
+#'     1, 2, 0,
+#'     2, 1, 0,
+#'     0, 0, 3
+#'   ),
+#'   nrow = 3,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- c("S1", "S2", "S3")
+#' colnames(counts) <- paste0("ASV", 1:3)
+#'
+#' beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+#' as_beta_compare_distance_correlations(beta_cmp)
+#' @export
+as_beta_compare_distance_correlations <- function(x,
+                                                  correlation_method = "spearman") {
+  if (!inherits(x, "microeda_beta_compare")) {
+    stop("`x` must be a microeda_beta_compare object.", call. = FALSE)
+  }
+
+  correlation_method <- validate_beta_correlation_method(correlation_method)
+  if (length(x$methods) < 2) {
+    return(beta_empty_distance_correlations())
+  }
+
+  distances <- as_beta_compare_distances(x)
+  method_pairs <- utils::combn(x$methods, 2, simplify = FALSE)
+  rows <- lapply(method_pairs, function(method_pair) {
+    beta_distance_correlation_row(
+      method_1 = method_pair[1],
+      method_2 = method_pair[2],
+      distances = distances,
+      correlation_method = correlation_method
+    )
+  })
+
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
+}
+
 #' Summarize beta diversity method comparisons by group
 #'
 #' @param x A `microeda_beta_compare` object with group metadata.
@@ -231,6 +288,23 @@ validate_beta_compare_methods <- function(methods) {
   methods
 }
 
+validate_beta_correlation_method <- function(correlation_method) {
+  supported_methods <- c("pearson", "spearman", "kendall")
+  if (!is.character(correlation_method) ||
+      length(correlation_method) != 1 ||
+      is.na(correlation_method) ||
+      !correlation_method %in% supported_methods) {
+    stop(
+      "`correlation_method` must be one of: ",
+      paste0("\"", supported_methods, "\"", collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  correlation_method
+}
+
 beta_compare_summary_row <- function(x) {
   distances <- as.numeric(as_beta_dist(x))
   if (length(distances) == 0) {
@@ -275,6 +349,53 @@ beta_compare_distance_rows <- function(x, group = NULL, group_values = NULL) {
 
   out$distance <- distances
   out
+}
+
+beta_distance_correlation_row <- function(method_1,
+                                          method_2,
+                                          distances,
+                                          correlation_method) {
+  distance_1 <- distances$distance[distances$method == method_1]
+  distance_2 <- distances$distance[distances$method == method_2]
+  correlation <- beta_distance_correlation(
+    distance_1,
+    distance_2,
+    correlation_method
+  )
+
+  data.frame(
+    method_1 = method_1,
+    method_2 = method_2,
+    n_pairs = length(distance_1),
+    correlation = correlation,
+    correlation_method = correlation_method,
+    stringsAsFactors = FALSE
+  )
+}
+
+beta_distance_correlation <- function(distance_1,
+                                      distance_2,
+                                      correlation_method) {
+  if (length(distance_1) < 2 || length(distance_2) < 2) {
+    return(NA_real_)
+  }
+
+  unname(suppressWarnings(stats::cor(
+    distance_1,
+    distance_2,
+    method = correlation_method
+  )))
+}
+
+beta_empty_distance_correlations <- function() {
+  data.frame(
+    method_1 = character(),
+    method_2 = character(),
+    n_pairs = integer(),
+    correlation = numeric(),
+    correlation_method = character(),
+    stringsAsFactors = FALSE
+  )
 }
 
 beta_dist_sample_pairs <- function(distance) {

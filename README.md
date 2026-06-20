@@ -195,6 +195,7 @@ beta_cmp
 as_beta_compare_summary(beta_cmp)
 as_beta_compare_distances(beta_cmp)
 as_beta_compare_group_summary(beta_cmp)
+as_beta_compare_distance_correlations(beta_cmp)
 cat(microeda_beta_compare_report(beta_cmp))
 
 ord_cmp <- microeda_beta_compare_ordination(beta_cmp)
@@ -223,6 +224,10 @@ implemented beta methods.
 downstream summaries, reports, and plots.
 `as_beta_compare_group_summary()` summarizes within- and between-group
 distances for grouped comparisons.
+`as_beta_compare_distance_correlations()` describes how similarly different
+beta methods rank pairwise sample distances.
+These correlations are descriptive and do not replace PERMANOVA, dispersion
+checks, or compositional diagnostics.
 `microeda_beta_compare_report()` returns a compact text report combining
 method-level and grouped beta distance summaries.
 `microeda_beta_compare_ordination()` computes side-by-side PCoA coordinates

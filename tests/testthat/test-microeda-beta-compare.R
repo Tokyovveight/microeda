@@ -262,6 +262,186 @@ test_that("as_beta_compare_distances marks missing group comparisons as missing"
   expect_equal(distances$comparison, c(NA_character_, "within", NA_character_))
 })
 
+test_that("as_beta_compare_distance_correlations returns stable correlations", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+  correlations <- as_beta_compare_distance_correlations(beta_cmp)
+
+  expect_s3_class(correlations, "data.frame")
+  expect_named(
+    correlations,
+    c(
+      "method_1",
+      "method_2",
+      "n_pairs",
+      "correlation",
+      "correlation_method"
+    )
+  )
+  expect_equal(nrow(correlations), 3L)
+  expect_equal(correlations$method_1, c("bray", "bray", "jaccard"))
+  expect_equal(correlations$method_2, c("jaccard", "hellinger", "hellinger"))
+  expect_equal(correlations$n_pairs, rep(3L, 3))
+  expect_equal(correlations$correlation_method, rep("spearman", 3))
+
+  manual <- stats::cor(
+    as.numeric(as_beta_dist(beta_cmp$results$bray)),
+    as.numeric(as_beta_dist(beta_cmp$results$jaccard)),
+    method = "spearman"
+  )
+  expect_equal(correlations$correlation[1], unname(manual))
+})
+
+test_that("as_beta_compare_distance_correlations accepts supported methods", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+  for (correlation_method in c("pearson", "spearman", "kendall")) {
+    correlations <- as_beta_compare_distance_correlations(
+      beta_cmp,
+      correlation_method = correlation_method
+    )
+    expect_equal(
+      correlations$correlation_method,
+      rep(correlation_method, nrow(correlations))
+    )
+  }
+
+  pearson <- as_beta_compare_distance_correlations(
+    beta_cmp,
+    correlation_method = "pearson"
+  )
+  manual <- stats::cor(
+    as.numeric(as_beta_dist(beta_cmp$results$bray)),
+    as.numeric(as_beta_dist(beta_cmp$results$jaccard)),
+    method = "pearson"
+  )
+  expect_equal(pearson$correlation[1], unname(manual))
+})
+
+test_that("as_beta_compare_distance_correlations preserves subset method order", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    taxa_are_rows = FALSE,
+    methods = c("hellinger", "bray")
+  )
+  correlations <- as_beta_compare_distance_correlations(beta_cmp)
+
+  expect_equal(nrow(correlations), 1L)
+  expect_equal(correlations$method_1, "hellinger")
+  expect_equal(correlations$method_2, "bray")
+})
+
+test_that("as_beta_compare_distance_correlations handles one method", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    taxa_are_rows = FALSE,
+    methods = "bray"
+  )
+  correlations <- as_beta_compare_distance_correlations(beta_cmp)
+
+  expect_s3_class(correlations, "data.frame")
+  expect_named(
+    correlations,
+    c(
+      "method_1",
+      "method_2",
+      "n_pairs",
+      "correlation",
+      "correlation_method"
+    )
+  )
+  expect_equal(nrow(correlations), 0L)
+})
+
+test_that("as_beta_compare_distance_correlations validates input", {
+  counts <- matrix(
+    c(1, 0, 0, 1),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("S1", "S2"), c("ASV1", "ASV2"))
+  )
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+
+  expect_error(
+    as_beta_compare_distance_correlations(data.frame()),
+    "microeda_beta_compare"
+  )
+  expect_error(
+    as_beta_compare_distance_correlations(
+      beta_cmp,
+      correlation_method = "unknown"
+    ),
+    "pearson.*spearman.*kendall"
+  )
+})
+
+test_that("as_beta_compare_distance_correlations handles undefined correlations", {
+  counts <- matrix(
+    0,
+    nrow = 3,
+    ncol = 2,
+    dimnames = list(c("S1", "S2", "S3"), c("ASV1", "ASV2"))
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    taxa_are_rows = FALSE,
+    methods = c("bray", "jaccard")
+  )
+  expect_silent(
+    correlations <- as_beta_compare_distance_correlations(beta_cmp)
+  )
+
+  expect_equal(correlations$n_pairs, 3L)
+  expect_true(is.na(correlations$correlation))
+})
+
 test_that("as_beta_compare_group_summary returns stable grouped summaries", {
   counts <- matrix(
     c(
