@@ -39,3 +39,5 @@
   multi-method beta diversity comparison.
 * Added `as_beta_compare_distances()` for long-form pairwise distances from
   beta method comparisons.
+* Added `as_beta_compare_group_summary()` for within- and between-group beta
+  distance summaries.

@@ -175,6 +175,51 @@ as_beta_compare_distances <- function(x) {
   out
 }
 
+#' Summarize beta diversity method comparisons by group
+#'
+#' @param x A `microeda_beta_compare` object with group metadata.
+#'
+#' @return A data frame with one row per method and comparison level.
+#' @export
+as_beta_compare_group_summary <- function(x) {
+  if (!inherits(x, "microeda_beta_compare")) {
+    stop("`x` must be a microeda_beta_compare object.", call. = FALSE)
+  }
+
+  if (is.null(x$group)) {
+    stop("`x` must include group metadata.", call. = FALSE)
+  }
+
+  distances <- as_beta_compare_distances(x)
+  distances <- distances[!is.na(distances$comparison), , drop = FALSE]
+  if (nrow(distances) == 0) {
+    return(beta_empty_group_summary())
+  }
+
+  rows <- list()
+  comparisons <- c("within", "between")
+  for (method in x$methods) {
+    for (comparison in comparisons) {
+      subset <- distances[
+        distances$method == method & distances$comparison == comparison,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(subset) > 0) {
+        rows[[length(rows) + 1L]] <- beta_group_summary_row(
+          method = method,
+          comparison = comparison,
+          distances = subset$distance
+        )
+      }
+    }
+  }
+
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
+}
+
 #' Extract beta diversity distances
 #'
 #' @param x A `microeda_beta` object.
@@ -624,6 +669,30 @@ beta_group_comparison <- function(group_1, group_2) {
   comparison <- ifelse(group_1 == group_2, "within", "between")
   comparison[is.na(group_1) | is.na(group_2)] <- NA_character_
   unname(comparison)
+}
+
+beta_group_summary_row <- function(method, comparison, distances) {
+  data.frame(
+    method = method,
+    comparison = comparison,
+    n_pairs = length(distances),
+    min_distance = min(distances),
+    median_distance = stats::median(distances),
+    max_distance = max(distances),
+    stringsAsFactors = FALSE
+  )
+}
+
+beta_empty_group_summary <- function() {
+  data.frame(
+    method = character(),
+    comparison = character(),
+    n_pairs = integer(),
+    min_distance = numeric(),
+    median_distance = numeric(),
+    max_distance = numeric(),
+    stringsAsFactors = FALSE
+  )
 }
 
 beta_ordination_coordinates <- function(points,
