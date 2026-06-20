@@ -149,6 +149,8 @@ microeda_alpha_pairwise_report(alpha_cmp)
 
 ## Beta diversity
 
+### Single-method beta diversity
+
 ```r
 beta_bray <- microeda_beta(
   counts,
@@ -177,7 +179,11 @@ as_beta_dist(beta_bray)
 as_beta_matrix(beta_bray)
 as_beta_samples(beta_bray)
 microeda_beta_plot(beta_bray)
+```
 
+### Beta method comparison
+
+```r
 beta_cmp <- microeda_beta_compare(
   counts,
   metadata = metadata,
@@ -190,7 +196,11 @@ as_beta_compare_summary(beta_cmp)
 as_beta_compare_distances(beta_cmp)
 as_beta_compare_group_summary(beta_cmp)
 cat(microeda_beta_compare_report(beta_cmp))
+```
 
+### Beta ordination
+
+```r
 ord <- microeda_beta_ordination(beta_bray)
 as_beta_coordinates(ord)
 ```

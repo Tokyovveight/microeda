@@ -15,11 +15,11 @@ microeda_beta(
 \arguments{
 \item{x}{A \code{phyloseq} object, matrix, or data frame containing counts.}
 
-\item{metadata}{Optional sample metadata. Required for non-phyloseq inputs
-when group-level diagnostics are desired.}
+\item{metadata}{Optional sample metadata. Required when \code{group} is supplied
+for non-phyloseq inputs.}
 
-\item{group}{Optional metadata column used for group-size diagnostics and
-group-aware recommendations.}
+\item{group}{Optional sample metadata column used for group labels, grouped
+summaries, and reports.}
 
 \item{taxa_are_rows}{For matrix/data frame inputs, whether rows are taxa.
 Ignored for \code{phyloseq} input because the orientation is read from the

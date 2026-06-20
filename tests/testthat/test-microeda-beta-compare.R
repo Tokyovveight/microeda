@@ -1,0 +1,495 @@
+test_that("microeda_beta_compare computes default beta methods", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+
+  expect_s3_class(beta_cmp, "microeda_beta_compare")
+  expect_equal(beta_cmp$methods, c("bray", "jaccard", "hellinger"))
+  expect_named(beta_cmp$results, beta_cmp$methods)
+  expect_true(all(vapply(
+    beta_cmp$results,
+    inherits,
+    logical(1),
+    "microeda_beta"
+  )))
+  expect_true(all(vapply(
+    beta_cmp$results,
+    function(result) identical(result$sample_ids, beta_cmp$sample_ids),
+    logical(1)
+  )))
+})
+
+test_that("microeda_beta_compare preserves requested method order", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    taxa_are_rows = FALSE,
+    methods = c("hellinger", "bray")
+  )
+
+  expect_equal(beta_cmp$methods, c("hellinger", "bray"))
+  expect_named(beta_cmp$results, c("hellinger", "bray"))
+  expect_equal(
+    unname(vapply(beta_cmp$results, `[[`, character(1), "method")),
+    beta_cmp$methods
+  )
+})
+
+test_that("microeda_beta_compare carries group metadata", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "A", "B"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+
+  expect_equal(beta_cmp$group, "group")
+  expect_equal(unname(beta_cmp$group_values), metadata$group)
+  expect_equal(names(beta_cmp$group_values), rownames(counts))
+})
+
+test_that("microeda_beta_compare validates methods", {
+  counts <- matrix(
+    c(1, 0, 0, 1),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("S1", "S2"), c("ASV1", "ASV2"))
+  )
+
+  expect_error(
+    microeda_beta_compare(
+      counts,
+      taxa_are_rows = FALSE,
+      methods = c("bray", "bray")
+    ),
+    "duplicate"
+  )
+  expect_error(
+    microeda_beta_compare(
+      counts,
+      taxa_are_rows = FALSE,
+      methods = c("bray", "unknown")
+    ),
+    "bray.*jaccard.*hellinger"
+  )
+})
+
+test_that("as_beta_compare_summary returns stable method summaries", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+  summary <- as_beta_compare_summary(beta_cmp)
+
+  expect_s3_class(summary, "data.frame")
+  expect_named(
+    summary,
+    c(
+      "method",
+      "n_samples",
+      "n_pairs",
+      "min_distance",
+      "median_distance",
+      "max_distance"
+    )
+  )
+  expect_equal(summary$method, beta_cmp$methods)
+  expect_equal(nrow(summary), length(beta_cmp$methods))
+  expect_equal(summary$n_samples, rep(3, length(beta_cmp$methods)))
+  expect_equal(summary$n_pairs, rep(3, length(beta_cmp$methods)))
+  expect_error(as_beta_compare_summary(data.frame()), "microeda_beta_compare")
+})
+
+test_that("as_beta_compare_distances returns stable ungrouped pairwise distances", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    taxa_are_rows = FALSE,
+    methods = c("hellinger", "bray")
+  )
+  distances <- as_beta_compare_distances(beta_cmp)
+
+  expect_s3_class(distances, "data.frame")
+  expect_named(distances, c("method", "sample_1", "sample_2", "distance"))
+  expect_equal(nrow(distances), length(beta_cmp$methods) * 3)
+  expect_equal(
+    distances$method,
+    rep(beta_cmp$methods, each = 3)
+  )
+  expect_equal(
+    distances$sample_1[seq_len(3)],
+    c("S1", "S1", "S2")
+  )
+  expect_equal(
+    distances$sample_2[seq_len(3)],
+    c("S2", "S3", "S3")
+  )
+
+  bray_rows <- distances$method == "bray"
+  expect_equal(
+    distances$distance[bray_rows],
+    as.numeric(as_beta_dist(beta_cmp$results$bray))
+  )
+  expect_error(as_beta_compare_distances(data.frame()), "microeda_beta_compare")
+})
+
+test_that("as_beta_compare_distances includes grouped pairwise labels", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "B", "A"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE,
+    methods = "bray"
+  )
+  distances <- as_beta_compare_distances(beta_cmp)
+
+  expect_named(
+    distances,
+    c(
+      "method",
+      "sample_1",
+      "sample_2",
+      "group_1",
+      "group_2",
+      "comparison",
+      "distance"
+    )
+  )
+  expect_equal(distances$group_1, c("A", "A", "B"))
+  expect_equal(distances$group_2, c("B", "A", "A"))
+  expect_equal(distances$comparison, c("between", "within", "between"))
+})
+
+test_that("as_beta_compare_distances marks missing group comparisons as missing", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", NA, "A"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE,
+    methods = "bray"
+  )
+  distances <- as_beta_compare_distances(beta_cmp)
+
+  expect_equal(distances$comparison, c(NA_character_, "within", NA_character_))
+})
+
+test_that("as_beta_compare_group_summary returns stable grouped summaries", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "B", "A"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE,
+    methods = c("hellinger", "bray")
+  )
+  summary <- as_beta_compare_group_summary(beta_cmp)
+  distances <- as_beta_compare_distances(beta_cmp)
+
+  expect_s3_class(summary, "data.frame")
+  expect_named(
+    summary,
+    c(
+      "method",
+      "comparison",
+      "n_pairs",
+      "min_distance",
+      "median_distance",
+      "max_distance"
+    )
+  )
+  expect_equal(
+    summary$method,
+    rep(c("hellinger", "bray"), each = 2)
+  )
+  expect_equal(
+    summary$comparison,
+    rep(c("within", "between"), times = 2)
+  )
+  expect_equal(summary$n_pairs, c(1L, 2L, 1L, 2L))
+
+  manual <- distances[
+    distances$method == "bray" & distances$comparison == "between",
+    ,
+    drop = FALSE
+  ]
+  bray_between <- summary[
+    summary$method == "bray" & summary$comparison == "between",
+    ,
+    drop = FALSE
+  ]
+
+  expect_equal(bray_between$n_pairs, nrow(manual))
+  expect_equal(bray_between$min_distance, min(manual$distance))
+  expect_equal(bray_between$median_distance, stats::median(manual$distance))
+  expect_equal(bray_between$max_distance, max(manual$distance))
+})
+
+test_that("as_beta_compare_group_summary validates grouped input", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+
+  expect_error(as_beta_compare_group_summary(data.frame()), "microeda_beta_compare")
+  expect_error(as_beta_compare_group_summary(beta_cmp), "group metadata")
+})
+
+test_that("as_beta_compare_group_summary returns stable empty summaries", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c(NA_character_, NA_character_, NA_character_),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE,
+    methods = "bray"
+  )
+  summary <- as_beta_compare_group_summary(beta_cmp)
+
+  expect_s3_class(summary, "data.frame")
+  expect_named(
+    summary,
+    c(
+      "method",
+      "comparison",
+      "n_pairs",
+      "min_distance",
+      "median_distance",
+      "max_distance"
+    )
+  )
+  expect_equal(nrow(summary), 0L)
+})
+
+test_that("microeda_beta_compare_report returns compact grouped reports", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "B", "A"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  output <- capture.output(report <- microeda_beta_compare_report(beta_cmp))
+
+  expect_identical(output, character())
+  expect_type(report, "character")
+  expect_length(report, 1)
+  expect_match(report, "Beta diversity method comparison", fixed = TRUE)
+  expect_match(report, "Methods: bray, jaccard, hellinger", fixed = TRUE)
+  expect_match(report, "Samples: 3", fixed = TRUE)
+  expect_match(report, "Group: group", fixed = TRUE)
+  expect_match(report, "Method-level distance summary", fixed = TRUE)
+  expect_match(report, "Group-level distance summary", fixed = TRUE)
+  expect_match(report, "Bray-Curtis: abundance-sensitive distance.", fixed = TRUE)
+  expect_match(report, "Jaccard: binary presence/absence distance.", fixed = TRUE)
+  expect_match(report, "Hellinger: square-root relative abundance", fixed = TRUE)
+  expect_match(report, "PERMANOVA is not implemented", fixed = TRUE)
+  expect_match(report, "Formal method recommendation is not implemented yet.", fixed = TRUE)
+})
+
+test_that("microeda_beta_compare_report handles ungrouped comparisons", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+  report <- microeda_beta_compare_report(beta_cmp)
+
+  expect_match(report, "Group: <none>", fixed = TRUE)
+  expect_match(
+    report,
+    "Group-level distance summary unavailable: no group metadata supplied.",
+    fixed = TRUE
+  )
+})
+
+test_that("microeda_beta_compare_report validates input", {
+  expect_error(
+    microeda_beta_compare_report(data.frame()),
+    "microeda_beta_compare"
+  )
+})
+
+test_that("microeda_beta_compare prints compact summaries", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "A", "B"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  output <- capture.output(result <- withVisible(print(beta_cmp)))
+
+  expect_false(result$visible)
+  expect_identical(result$value, beta_cmp)
+  expect_true(any(grepl("microeda_beta_compare", output)))
+  expect_true(any(grepl("Methods: +bray, jaccard, hellinger", output)))
+  expect_true(any(grepl("Samples: +3", output)))
+  expect_true(any(grepl("Group: +group", output)))
+  expect_true(any(grepl("as_beta_compare_summary", output)))
+})
