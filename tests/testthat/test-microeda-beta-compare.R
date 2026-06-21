@@ -721,3 +721,112 @@ test_that("microeda_beta_compare prints compact summaries", {
   expect_true(any(grepl("Group: +group", output)))
   expect_true(any(grepl("as_beta_compare_summary", output)))
 })
+
+test_that("beta_compare_rule_context returns stable internal context", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+  context <- microeda:::beta_compare_rule_context(beta_cmp)
+
+  expect_type(context, "list")
+  expect_named(context, c("summary", "methods", "caveats"))
+  expect_s3_class(context$summary, "data.frame")
+  expect_named(
+    context$summary,
+    c(
+      "n_methods",
+      "methods",
+      "n_samples",
+      "group",
+      "has_group",
+      "has_group_summary",
+      "has_distance_correlations"
+    )
+  )
+  expect_equal(context$summary$n_methods, length(beta_cmp$methods))
+  expect_equal(context$summary$methods, paste(beta_cmp$methods, collapse = ", "))
+  expect_equal(context$summary$n_samples, length(beta_cmp$sample_ids))
+  expect_false(context$summary$has_group)
+  expect_false(context$summary$has_group_summary)
+  expect_true(context$summary$has_distance_correlations)
+  expect_equal(context$methods$method, beta_cmp$methods)
+  expect_equal(context$methods$n_samples, rep(3, length(beta_cmp$methods)))
+})
+
+test_that("beta_compare_rule_context detects grouped comparisons", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "B", "A"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  context <- microeda:::beta_compare_rule_context(beta_cmp)
+
+  expect_true(context$summary$has_group)
+  expect_equal(context$summary$group, "group")
+  expect_true(context$summary$has_group_summary)
+})
+
+test_that("beta_compare_rule_context includes non-ranking caveats", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+  caveats <- microeda:::beta_compare_rule_context(beta_cmp)$caveats
+
+  expect_named(
+    caveats,
+    c("context_id", "topic", "method", "severity", "message")
+  )
+  expect_true("jaccard_incidence" %in% caveats$context_id)
+  expect_true("hellinger_not_log_ratio" %in% caveats$context_id)
+  expect_true("distance_correlations_descriptive" %in% caveats$context_id)
+  expect_true("pcoa_axes_method_specific" %in% caveats$context_id)
+  expect_true(any(grepl("incidence-based", caveats$message, fixed = TRUE)))
+  expect_true(any(grepl("not a log-ratio", caveats$message, fixed = TRUE)))
+  expect_true(any(grepl("do not validate a method", caveats$message, fixed = TRUE)))
+  expect_true(any(grepl("method-specific", caveats$message, fixed = TRUE)))
+  expect_false(any(grepl("best method", caveats$message, ignore.case = TRUE)))
+})
+
+test_that("beta_compare_rule_context validates input", {
+  expect_error(
+    microeda:::beta_compare_rule_context(data.frame()),
+    "microeda_beta_compare"
+  )
+})
