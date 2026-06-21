@@ -48,3 +48,5 @@
   methods.
 * Added `as_beta_compare_distance_correlations()` for descriptive correlations
   between beta distance methods.
+* `microeda_beta_compare_report()` now includes descriptive distance-method
+  correlations.

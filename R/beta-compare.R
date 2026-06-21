@@ -202,10 +202,13 @@ as_beta_compare_group_summary <- function(x) {
 #' Build a compact beta diversity method comparison report
 #'
 #' `microeda_beta_compare_report()` combines beta method summaries into a
-#' compact text report. It does not run PERMANOVA or make formal method
-#' recommendations.
+#' compact text report. Distance-method correlations are descriptive only. This
+#' report does not run PERMANOVA or make formal method recommendations.
 #'
 #' @param x A `microeda_beta_compare` object.
+#' @param correlation_method Correlation method passed to
+#'   [as_beta_compare_distance_correlations()]. Supported values are
+#'   `"pearson"`, `"spearman"`, and `"kendall"`.
 #'
 #' @return A single character string.
 #' @examples
@@ -224,10 +227,16 @@ as_beta_compare_group_summary <- function(x) {
 #' beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
 #' microeda_beta_compare_report(beta_cmp)
 #' @export
-microeda_beta_compare_report <- function(x) {
+microeda_beta_compare_report <- function(x,
+                                         correlation_method = "spearman") {
   if (!inherits(x, "microeda_beta_compare")) {
     stop("`x` must be a microeda_beta_compare object.", call. = FALSE)
   }
+
+  correlations <- as_beta_compare_distance_correlations(
+    x,
+    correlation_method = correlation_method
+  )
 
   separator <- "========================================="
   lines <- c(
@@ -241,6 +250,21 @@ microeda_beta_compare_report <- function(x) {
     "",
     "Method-level distance summary",
     beta_compare_report_table(as_beta_compare_summary(x)),
+    "",
+    "Distance-method correlations"
+  )
+
+  if (nrow(correlations) == 0) {
+    lines <- c(
+      lines,
+      "Distance-method correlations unavailable: fewer than two beta methods supplied."
+    )
+  } else {
+    lines <- c(lines, beta_compare_report_table(correlations))
+  }
+
+  lines <- c(
+    lines,
     "",
     "Group-level distance summary"
   )
@@ -261,6 +285,7 @@ microeda_beta_compare_report <- function(x) {
     "- Bray-Curtis: abundance-sensitive distance.",
     "- Jaccard: binary presence/absence distance.",
     "- Hellinger: square-root relative abundance transform followed by Euclidean distance.",
+    "- Distance-method correlations are descriptive only and do not identify the correct method.",
     "- PERMANOVA is not implemented in this report.",
     "- Formal method recommendation is not implemented yet."
   )

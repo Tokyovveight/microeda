@@ -601,10 +601,17 @@ test_that("microeda_beta_compare_report returns compact grouped reports", {
   expect_match(report, "Samples: 3", fixed = TRUE)
   expect_match(report, "Group: group", fixed = TRUE)
   expect_match(report, "Method-level distance summary", fixed = TRUE)
+  expect_match(report, "Distance-method correlations", fixed = TRUE)
+  expect_match(report, "spearman", fixed = TRUE)
   expect_match(report, "Group-level distance summary", fixed = TRUE)
   expect_match(report, "Bray-Curtis: abundance-sensitive distance.", fixed = TRUE)
   expect_match(report, "Jaccard: binary presence/absence distance.", fixed = TRUE)
   expect_match(report, "Hellinger: square-root relative abundance", fixed = TRUE)
+  expect_match(
+    report,
+    "Distance-method correlations are descriptive only",
+    fixed = TRUE
+  )
   expect_match(report, "PERMANOVA is not implemented", fixed = TRUE)
   expect_match(report, "Formal method recommendation is not implemented yet.", fixed = TRUE)
 })
@@ -626,6 +633,7 @@ test_that("microeda_beta_compare_report handles ungrouped comparisons", {
   report <- microeda_beta_compare_report(beta_cmp)
 
   expect_match(report, "Group: <none>", fixed = TRUE)
+  expect_match(report, "Distance-method correlations", fixed = TRUE)
   expect_match(
     report,
     "Group-level distance summary unavailable: no group metadata supplied.",
@@ -634,9 +642,49 @@ test_that("microeda_beta_compare_report handles ungrouped comparisons", {
 })
 
 test_that("microeda_beta_compare_report validates input", {
+  counts <- matrix(
+    c(1, 0, 0, 1),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("S1", "S2"), c("ASV1", "ASV2"))
+  )
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+
   expect_error(
     microeda_beta_compare_report(data.frame()),
     "microeda_beta_compare"
+  )
+  expect_error(
+    microeda_beta_compare_report(beta_cmp, correlation_method = "unknown"),
+    "pearson.*spearman.*kendall"
+  )
+})
+
+test_that("microeda_beta_compare_report handles one-method correlations", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    taxa_are_rows = FALSE,
+    methods = "bray"
+  )
+  report <- microeda_beta_compare_report(beta_cmp)
+
+  expect_match(report, "Distance-method correlations", fixed = TRUE)
+  expect_match(
+    report,
+    "Distance-method correlations unavailable: fewer than two beta methods supplied.",
+    fixed = TRUE
   )
 })
 

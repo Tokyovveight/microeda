@@ -4,18 +4,22 @@
 \alias{microeda_beta_compare_report}
 \title{Build a compact beta diversity method comparison report}
 \usage{
-microeda_beta_compare_report(x)
+microeda_beta_compare_report(x, correlation_method = "spearman")
 }
 \arguments{
 \item{x}{A \code{microeda_beta_compare} object.}
+
+\item{correlation_method}{Correlation method passed to
+\code{\link[=as_beta_compare_distance_correlations]{as_beta_compare_distance_correlations()}}. Supported values are
+\code{"pearson"}, \code{"spearman"}, and \code{"kendall"}.}
 }
 \value{
 A single character string.
 }
 \description{
 \code{microeda_beta_compare_report()} combines beta method summaries into a
-compact text report. It does not run PERMANOVA or make formal method
-recommendations.
+compact text report. Distance-method correlations are descriptive only. This
+report does not run PERMANOVA or make formal method recommendations.
 }
 \examples{
 counts <- matrix(

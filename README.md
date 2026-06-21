@@ -229,7 +229,7 @@ beta methods rank pairwise sample distances.
 These correlations are descriptive and do not replace PERMANOVA, dispersion
 checks, or compositional diagnostics.
 `microeda_beta_compare_report()` returns a compact text report combining
-method-level and grouped beta distance summaries.
+method-level, distance-correlation, and grouped beta distance summaries.
 `microeda_beta_compare_ordination()` computes side-by-side PCoA coordinates
 across beta methods.
 PCoA coordinates are method-specific; axes from different distance methods are
