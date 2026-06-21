@@ -81,6 +81,127 @@ test_that("taxonomy rank summaries count assigned and unique taxa", {
   expect_equal(report$diagnostics$taxonomy$assigned_features_by_rank[["Genus"]], 2)
 })
 
+test_that("check_rule_context returns stable internal context", {
+  counts <- matrix(
+    c(
+      10, 0, 2,
+      0, 5, 1
+    ),
+    nrow = 2,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2")
+  colnames(counts) <- c("ASV1", "ASV2", "ASV3")
+
+  report <- microeda_check(counts, taxa_are_rows = FALSE)
+  context <- microeda:::check_rule_context(report$diagnostics)
+
+  expect_named(report, c("diagnostics", "recommendations", "call"))
+  expect_s3_class(report, "microeda_report")
+  expect_type(context, "list")
+  expect_named(context, c("summary", "context"))
+  expect_s3_class(context$summary, "data.frame")
+  expect_named(
+    context$summary,
+    c(
+      "n_samples",
+      "n_features",
+      "input_scale",
+      "zero_fraction",
+      "library_size_imbalance_ratio",
+      "has_group",
+      "min_group_n",
+      "has_metadata",
+      "max_metadata_missing_fraction",
+      "has_taxonomy",
+      "max_taxonomy_missing_fraction"
+    )
+  )
+  expect_equal(context$summary$n_samples, 2)
+  expect_equal(context$summary$n_features, 3)
+  expect_equal(context$summary$input_scale, "integer_counts")
+  expect_equal(context$summary$zero_fraction, mean(counts == 0))
+  expect_false(context$summary$has_group)
+  expect_false(context$summary$has_metadata)
+  expect_false(context$summary$has_taxonomy)
+  expect_named(
+    context$context,
+    c("context_id", "topic", "metric", "value", "numeric_value", "label")
+  )
+  expect_true(all(c(
+    "count_scale",
+    "sample_count",
+    "feature_count",
+    "zero_fraction",
+    "library_size_imbalance",
+    "group_available",
+    "metadata_available",
+    "taxonomy_available"
+  ) %in% context$context$context_id))
+  expect_false(any(grepl("recommend", context$context$label, ignore.case = TRUE)))
+})
+
+test_that("check_rule_context detects grouped metadata and taxonomy diagnostics", {
+  counts <- matrix(
+    c(
+      10, 0, 2,
+      0, 5, 1,
+      4, 0, 0,
+      1, 1, 0
+    ),
+    nrow = 4,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(4))
+  colnames(counts) <- c("ASV1", "ASV2", "ASV3")
+
+  metadata <- data.frame(
+    group = c("A", "A", "B", "B"),
+    batch = c("x", NA, "x", "y"),
+    row.names = rownames(counts)
+  )
+  taxonomy <- data.frame(
+    Phylum = c("Firmicutes", "Bacteroidota", "Firmicutes"),
+    Genus = c("Lactobacillus", "unclassified", "Streptococcus"),
+    row.names = colnames(counts)
+  )
+
+  report <- microeda_check(
+    counts,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  context <- microeda:::check_rule_context(report$diagnostics)
+
+  expect_true(context$summary$has_group)
+  expect_equal(context$summary$min_group_n, 2)
+  expect_true(context$summary$has_metadata)
+  expect_equal(context$summary$max_metadata_missing_fraction, 0.25)
+  expect_true(context$summary$has_taxonomy)
+  expect_equal(context$summary$max_taxonomy_missing_fraction, 1 / 3)
+  expect_true(all(c(
+    "minimum_group_size",
+    "metadata_missingness",
+    "taxonomy_missingness"
+  ) %in% context$context$context_id))
+
+  group_row <- context$context[
+    context$context$context_id == "minimum_group_size",
+    ,
+    drop = FALSE
+  ]
+  expect_equal(group_row$numeric_value, 2)
+})
+
+test_that("check_rule_context validates input", {
+  expect_error(
+    microeda:::check_rule_context(data.frame()),
+    "diagnostics object from microeda_check"
+  )
+})
+
 test_that("microeda_alpha computes classic and Hill alpha indices", {
   counts <- matrix(
     c(
