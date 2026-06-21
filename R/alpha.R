@@ -4,10 +4,22 @@
 #' count-like microbiome tables. It reports classic indices and their Hill
 #' number interpretation so Shannon and Simpson can be read as effective taxa.
 #'
-#' @inheritParams microeda_check
+#' @param x A `phyloseq` object, matrix, or data frame containing counts.
+#' @param metadata Optional sample metadata. Required for non-phyloseq inputs
+#'   when group-level summaries are desired.
+#' @param group Optional metadata column used for group summaries.
+#' @param taxa_are_rows For matrix/data frame inputs, whether rows are taxa.
+#'   Ignored for `phyloseq` input because the orientation is read from the
+#'   object.
 #'
 #' @return A `microeda_alpha` object with per-sample indices and optional
 #'   group summaries.
+#' @examples
+#' counts <- matrix(c(10, 0, 0, 5, 20, 0, 1, 0), nrow = 2, byrow = TRUE)
+#' rownames(counts) <- c("S1", "S2")
+#' colnames(counts) <- paste0("ASV", 1:4)
+#' alpha <- microeda_alpha(counts, taxa_are_rows = FALSE)
+#' as_alpha_table(alpha)
 #' @export
 microeda_alpha <- function(x,
                            metadata = NULL,
@@ -61,6 +73,8 @@ microeda_alpha <- function(x,
 
 #' Extract per-sample alpha diversity indices
 #'
+#' Extract the per-sample alpha diversity table from [microeda_alpha()].
+#'
 #' @param x A `microeda_alpha` object.
 #'
 #' @return A data frame with one row per sample.
@@ -74,6 +88,8 @@ as_alpha_table <- function(x) {
 }
 
 #' Extract alpha diversity group summaries
+#'
+#' Extract group-level summaries from [microeda_alpha()].
 #'
 #' @param x A `microeda_alpha` object.
 #'
@@ -221,6 +237,23 @@ plot_alpha_boxplot <- function(alpha_table, metric, group, ...) {
 #' @param pairwise Whether to run pairwise Wilcoxon tests.
 #'
 #' @return A `microeda_alpha_compare` object.
+#' @examples
+#' counts <- matrix(
+#'   c(10, 0, 0, 5, 20, 0, 1, 0, 0, 4, 0, 0),
+#'   nrow = 3,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- c("S1", "S2", "S3")
+#' colnames(counts) <- paste0("ASV", 1:4)
+#' metadata <- data.frame(group = c("A", "A", "B"), row.names = rownames(counts))
+#' alpha <- microeda_alpha(
+#'   counts,
+#'   metadata = metadata,
+#'   group = "group",
+#'   taxa_are_rows = FALSE
+#' )
+#' comparison <- microeda_alpha_compare(alpha)
+#' as_alpha_tests(comparison)
 #' @export
 microeda_alpha_compare <- function(x,
                                    metadata = NULL,
@@ -298,6 +331,9 @@ microeda_alpha_compare <- function(x,
 
 #' Extract alpha diversity omnibus tests
 #'
+#' Extract the omnibus alpha-diversity comparison table from
+#' [microeda_alpha_compare()].
+#'
 #' @param x A `microeda_alpha_compare` object.
 #'
 #' @return A data frame of Kruskal-Wallis test results.
@@ -311,6 +347,9 @@ as_alpha_tests <- function(x) {
 }
 
 #' Extract alpha diversity pairwise tests
+#'
+#' Extract the pairwise alpha-diversity comparison table from
+#' [microeda_alpha_compare()].
 #'
 #' @param x A `microeda_alpha_compare` object.
 #'

@@ -1,5 +1,7 @@
 #' Return the built-in evidence rules
 #'
+#' Return the built-in evidence rule table used by [microeda_check()].
+#'
 #' The same rule map is mirrored as `inst/extdata/evidence_rules.yml` so it can
 #' be inspected or edited outside R.
 #'

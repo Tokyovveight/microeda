@@ -17,7 +17,12 @@
 #' @param feature_read_n Number of features used for the first-N and top-N read
 #'   summaries.
 #'
-#' @return A `microeda_report` object.
+#' @return A `microeda_report` object with diagnostics and recommendations.
+#' @examples
+#' counts <- matrix(c(10, 0, 0, 5, 20, 0, 1, 0), nrow = 2, byrow = TRUE)
+#' rownames(counts) <- c("S1", "S2")
+#' colnames(counts) <- paste0("ASV", 1:4)
+#' microeda_check(counts, taxa_are_rows = FALSE)
 #' @export
 microeda_check <- function(x,
                            metadata = NULL,
@@ -50,6 +55,8 @@ microeda_check <- function(x,
 }
 
 #' Extract recommendations from a microeda report
+#'
+#' Extract the recommendations table from the result of [microeda_check()].
 #'
 #' @param x A `microeda_report` object.
 #'
