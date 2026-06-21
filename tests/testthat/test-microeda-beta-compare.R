@@ -763,6 +763,36 @@ test_that("beta_compare_rule_context returns stable internal context", {
   expect_equal(context$methods$n_samples, rep(3, length(beta_cmp$methods)))
 })
 
+test_that("beta_compare_rule_context documents shared caveat vocabulary", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+
+  beta_cmp <- microeda_beta_compare(counts, taxa_are_rows = FALSE)
+  context <- microeda:::beta_compare_rule_context(beta_cmp)
+
+  expect_s3_class(context$summary, "data.frame")
+  expect_equal(nrow(context$summary), 1L)
+  expect_s3_class(context$caveats, "data.frame")
+  expect_true(all(c("context_id", "topic") %in% names(context$caveats)))
+  expect_true(all(c("method", "severity", "message") %in% names(context$caveats)))
+  expect_type(context$caveats$context_id, "character")
+  expect_type(context$caveats$topic, "character")
+  expect_type(context$caveats$method, "character")
+  expect_type(context$caveats$severity, "character")
+  expect_type(context$caveats$message, "character")
+  expect_true(all(context$caveats$severity == "info"))
+  expect_false(any(grepl("best method|rank", context$caveats$message, ignore.case = TRUE)))
+})
+
 test_that("beta_compare_rule_context detects grouped comparisons", {
   counts <- matrix(
     c(

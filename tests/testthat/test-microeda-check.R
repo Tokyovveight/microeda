@@ -141,6 +141,39 @@ test_that("check_rule_context returns stable internal context", {
   expect_false(any(grepl("recommend", context$context$label, ignore.case = TRUE)))
 })
 
+test_that("check_rule_context documents shared rule context vocabulary", {
+  counts <- matrix(
+    c(
+      10, 0, 2,
+      0, 5, 1
+    ),
+    nrow = 2,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2")
+  colnames(counts) <- c("ASV1", "ASV2", "ASV3")
+
+  report <- microeda_check(counts, taxa_are_rows = FALSE)
+  context <- microeda:::check_rule_context(report$diagnostics)
+
+  expect_s3_class(context$summary, "data.frame")
+  expect_equal(nrow(context$summary), 1L)
+  expect_s3_class(context$context, "data.frame")
+  expect_true(all(c("context_id", "topic") %in% names(context$context)))
+  expect_true(all(c(
+    "metric",
+    "value",
+    "numeric_value",
+    "label"
+  ) %in% names(context$context)))
+  expect_type(context$context$context_id, "character")
+  expect_type(context$context$topic, "character")
+  expect_type(context$context$metric, "character")
+  expect_type(context$context$value, "character")
+  expect_type(context$context$label, "character")
+  expect_false(any(grepl("best method|rank", context$context$label, ignore.case = TRUE)))
+})
+
 test_that("check_rule_context detects grouped metadata and taxonomy diagnostics", {
   counts <- matrix(
     c(
