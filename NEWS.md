@@ -11,6 +11,8 @@
 * Added `microeda_qc_write_report()` for writing text QC reports to files.
 * Added `include_flags` and `include_observations` content controls to
   `microeda_qc_report()`.
+* `microeda_qc_report()` now includes compact QC flag and observation details
+  when requested.
 * Added `microeda_qc_plot()` as a minimal base R library-size QC plotting
   helper.
 * Added `type = "sparsity"` support to `microeda_qc_plot()`.

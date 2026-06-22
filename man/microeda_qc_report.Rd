@@ -9,17 +9,19 @@ microeda_qc_report(x, include_flags = TRUE, include_observations = TRUE)
 \arguments{
 \item{x}{A \code{microeda_qc} object.}
 
-\item{include_flags}{Whether to include the \verb{QC flags:} line.}
+\item{include_flags}{Whether to include the \verb{QC flags:} count and detail
+lines.}
 
-\item{include_observations}{Whether to include the \verb{QC observations:} line.}
+\item{include_observations}{Whether to include the \verb{QC observations:} count
+and detail lines.}
 }
 \value{
 A single character string.
 }
 \description{
 \code{microeda_qc_report()} turns a \code{microeda_qc} object into a short
-newline-separated text report. This is a minimal text skeleton for future
-richer QC reports.
+newline-separated text report with compact summary counts and optional
+flag and observation detail lines.
 }
 \examples{
 counts <- matrix(

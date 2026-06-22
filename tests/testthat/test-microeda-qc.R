@@ -247,6 +247,8 @@ test_that("microeda_qc_report returns compact text for QC objects", {
   expect_match(report, "Sparsity:", fixed = TRUE)
   expect_match(report, "QC flags:", fixed = TRUE)
   expect_match(report, "QC observations:", fixed = TRUE)
+  expect_match(report, "many_single_sample_features", fixed = TRUE)
+  expect_match(report, "input_dimensions", fixed = TRUE)
 })
 
 test_that("microeda_qc_report content controls omit requested lines", {
@@ -264,11 +266,13 @@ test_that("microeda_qc_report content controls omit requested lines", {
 
   no_flags <- microeda_qc_report(qc, include_flags = FALSE)
   expect_false(grepl("QC flags:", no_flags, fixed = TRUE))
+  expect_false(grepl("many_single_sample_features", no_flags, fixed = TRUE))
   expect_match(no_flags, "QC observations:", fixed = TRUE)
 
   no_observations <- microeda_qc_report(qc, include_observations = FALSE)
   expect_match(no_observations, "QC flags:", fixed = TRUE)
   expect_false(grepl("QC observations:", no_observations, fixed = TRUE))
+  expect_false(grepl("input_dimensions", no_observations, fixed = TRUE))
 
   compact <- microeda_qc_report(
     qc,
@@ -277,6 +281,57 @@ test_that("microeda_qc_report content controls omit requested lines", {
   )
   expect_false(grepl("QC flags:", compact, fixed = TRUE))
   expect_false(grepl("QC observations:", compact, fixed = TRUE))
+})
+
+test_that("microeda_qc_report includes compact flag and observation details", {
+  counts <- matrix(
+    c(
+      0, 0,
+      1, 0
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2"))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  report <- microeda_qc_report(qc)
+
+  expect_match(report, "QC flags: ", fixed = TRUE)
+  expect_match(report, "[warning] zero_library_samples", fixed = TRUE)
+  expect_match(report, "1 sample(s) have zero total counts.", fixed = TRUE)
+  expect_match(report, "QC observations: ", fixed = TRUE)
+  expect_match(report, "[info] total_reads", fixed = TRUE)
+  expect_match(report, "Total reads across all samples: 1.", fixed = TRUE)
+
+  no_flags <- microeda_qc_report(qc, include_flags = FALSE)
+  expect_false(grepl("zero_library_samples", no_flags, fixed = TRUE))
+  expect_match(no_flags, "total_reads", fixed = TRUE)
+
+  no_observations <- microeda_qc_report(qc, include_observations = FALSE)
+  expect_match(no_observations, "zero_library_samples", fixed = TRUE)
+  expect_false(grepl("total_reads", no_observations, fixed = TRUE))
+})
+
+test_that("microeda_qc_report uses neutral text when no flags are present", {
+  counts <- matrix(
+    c(
+      10, 0, 0, 5,
+      20, 0, 1, 0,
+      0, 4, 0, 0,
+      2, 3, 0, 1
+    ),
+    nrow = 4,
+    byrow = TRUE,
+    dimnames = list(paste0("s", 1:4), paste0("f", 1:4))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  report <- microeda_qc_report(qc)
+
+  expect_equal(nrow(qc$qc_flags), 0)
+  expect_match(report, "QC flags: 0", fixed = TRUE)
+  expect_match(report, "No QC flags triggered.", fixed = TRUE)
 })
 
 test_that("microeda_qc_report handles zero-library edge cases", {
@@ -346,6 +401,7 @@ test_that("microeda_qc_write_report writes reports and returns paths invisibly",
   expect_equal(result$value, path)
   expect_true(file.exists(path))
   expect_true(any(contents == "microeda QC report"))
+  expect_true(any(grepl("many_single_sample_features", contents, fixed = TRUE)))
 })
 
 test_that("microeda_qc_write_report passes report content controls through", {

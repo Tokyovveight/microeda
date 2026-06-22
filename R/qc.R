@@ -229,12 +229,14 @@ as_qc_issues <- function(x) {
 #' Build a compact text QC report
 #'
 #' `microeda_qc_report()` turns a `microeda_qc` object into a short
-#' newline-separated text report. This is a minimal text skeleton for future
-#' richer QC reports.
+#' newline-separated text report with compact summary counts and optional
+#' flag and observation detail lines.
 #'
 #' @param x A `microeda_qc` object.
-#' @param include_flags Whether to include the `QC flags:` line.
-#' @param include_observations Whether to include the `QC observations:` line.
+#' @param include_flags Whether to include the `QC flags:` count and detail
+#'   lines.
+#' @param include_observations Whether to include the `QC observations:` count
+#'   and detail lines.
 #'
 #' @return A single character string.
 #' @examples
@@ -291,14 +293,60 @@ microeda_qc_report <- function(x,
   )
 
   if (isTRUE(include_flags)) {
-    lines <- c(lines, paste0("QC flags: ", nrow(x$qc_flags)))
+    lines <- c(
+      lines,
+      "",
+      paste0("QC flags: ", nrow(x$qc_flags)),
+      .qc_report_flag_lines(x$qc_flags)
+    )
   }
 
   if (isTRUE(include_observations)) {
-    lines <- c(lines, paste0("QC observations: ", nrow(x$qc_observations)))
+    lines <- c(
+      lines,
+      "",
+      paste0("QC observations: ", nrow(x$qc_observations)),
+      .qc_report_observation_lines(x$qc_observations)
+    )
   }
 
   paste(lines, collapse = "\n")
+}
+
+.qc_report_flag_lines <- function(flags) {
+  if (nrow(flags) == 0) {
+    return("- No QC flags triggered.")
+  }
+
+  paste0(
+    "- [",
+    flags$severity,
+    "] ",
+    flags$flag_id,
+    ": ",
+    flags$message
+  )
+}
+
+.qc_report_observation_lines <- function(observations) {
+  observations <- observations[
+    !grepl("^flag_", observations$observation_id),
+    ,
+    drop = FALSE
+  ]
+
+  if (nrow(observations) == 0) {
+    return("- No QC observations available.")
+  }
+
+  paste0(
+    "- [",
+    observations$severity,
+    "] ",
+    observations$observation_id,
+    ": ",
+    observations$message
+  )
 }
 
 #' Write a compact text QC report
