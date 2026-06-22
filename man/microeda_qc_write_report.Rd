@@ -16,9 +16,11 @@ microeda_qc_write_report(
 
 \item{file}{A single non-missing file path.}
 
-\item{include_flags}{Whether to include the \verb{QC flags:} line.}
+\item{include_flags}{Whether to include the \verb{QC flags:} count and detail
+lines.}
 
-\item{include_observations}{Whether to include the \verb{QC observations:} line.}
+\item{include_observations}{Whether to include the \verb{QC observations:} count
+and detail lines.}
 }
 \value{
 The \code{file} path, invisibly.

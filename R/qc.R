@@ -356,8 +356,10 @@ microeda_qc_report <- function(x,
 #'
 #' @param x A `microeda_qc` object.
 #' @param file A single non-missing file path.
-#' @param include_flags Whether to include the `QC flags:` line.
-#' @param include_observations Whether to include the `QC observations:` line.
+#' @param include_flags Whether to include the `QC flags:` count and detail
+#'   lines.
+#' @param include_observations Whether to include the `QC observations:` count
+#'   and detail lines.
 #'
 #' @return The `file` path, invisibly.
 #' @examples
