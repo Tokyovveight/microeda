@@ -487,6 +487,7 @@ test_that("microeda_alpha_compare runs omnibus and pairwise tests", {
   expect_equal(as_alpha_tests(comparison)$index, c("observed", "hill_q1"))
   expect_true(all(c("p_value", "p_value_adjusted") %in% names(as_alpha_tests(comparison))))
   expect_true(nrow(as_alpha_pairwise(comparison)) > 0)
+  expect_true("statistic" %in% names(as_alpha_pairwise(comparison)))
 })
 
 test_that("as_alpha_pairwise keeps stable raw extractor columns", {
@@ -534,6 +535,7 @@ test_that("as_alpha_pairwise keeps stable raw extractor columns", {
       "median_1",
       "median_2",
       "median_difference",
+      "statistic",
       "p_value",
       "p_value_adjusted",
       "p_adjust_method",
@@ -542,6 +544,8 @@ test_that("as_alpha_pairwise keeps stable raw extractor columns", {
   )
   expect_type(pairwise$n_1, "integer")
   expect_type(pairwise$n_2, "integer")
+  expect_type(pairwise$statistic, "double")
+  expect_true(any(!is.na(pairwise$statistic)))
 })
 
 test_that("microeda_alpha_pairwise_report returns grouped compact text", {
@@ -577,6 +581,7 @@ test_that("microeda_alpha_pairwise_report returns grouped compact text", {
   )
 
   report <- microeda_alpha_pairwise_report(comparison)
+  pairwise <- as_alpha_pairwise(comparison)
   section_count <- gregexpr(
     "Pairwise comparisons for:",
     report,
@@ -606,6 +611,18 @@ test_that("microeda_alpha_pairwise_report returns grouped compact text", {
     "p.adj.signif"
   ) %in% strsplit(report, "\\s+")[[1]]))
   expect_true(any(grepl("^={10,}$", strsplit(report, "\n", fixed = TRUE)[[1]])))
+  expect_true(any(!is.na(pairwise$statistic)))
+  expect_match(
+    report,
+    paste0(
+      "\\s",
+      format(round(pairwise$statistic[which(!is.na(pairwise$statistic))[1]], 3),
+        trim = TRUE,
+        scientific = FALSE
+      ),
+      "\\s"
+    )
+  )
 })
 
 test_that("microeda_alpha_pairwise_report assigns adjusted p-value stars", {

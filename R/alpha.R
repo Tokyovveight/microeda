@@ -353,7 +353,8 @@ as_alpha_tests <- function(x) {
 #'
 #' @param x A `microeda_alpha_compare` object.
 #'
-#' @return A data frame of pairwise Wilcoxon test results.
+#' @return A data frame of pairwise Wilcoxon test results, including the
+#'   Wilcoxon test statistic.
 #' @export
 as_alpha_pairwise <- function(x) {
   if (!inherits(x, "microeda_alpha_compare")) {
@@ -893,8 +894,6 @@ alpha_pairwise_report_table <- function(pairwise) {
     group2 = pairwise$group_2,
     n1 = pairwise$n_1,
     n2 = pairwise$n_2,
-    # The raw pairwise extractor does not currently store the Wilcoxon
-    # statistic; keep the report descriptive without rerunning tests here.
     statistic = alpha_pairwise_report_statistic(pairwise),
     p = alpha_report_format_number(pairwise$p_value, digits = 3),
     p.adj = alpha_report_format_number(pairwise$p_value_adjusted, digits = 3),
@@ -1002,13 +1001,9 @@ run_alpha_pairwise <- function(alpha_table, group, index, p_adjust_method = "BH"
     group_1_values <- test_data$value[test_data$group == pair[1]]
     group_2_values <- test_data$value[test_data$group == pair[2]]
 
-    p_value <- tryCatch(
-      suppressWarnings(stats::wilcox.test(
-        group_1_values,
-        group_2_values,
-        exact = FALSE
-      )$p.value),
-      error = function(error) NA_real_
+    test_result <- alpha_wilcox_pairwise_result(
+      group_1_values,
+      group_2_values
     )
 
     data.frame(
@@ -1021,7 +1016,8 @@ run_alpha_pairwise <- function(alpha_table, group, index, p_adjust_method = "BH"
       median_2 = stats::median(group_2_values),
       median_difference = stats::median(group_1_values) -
         stats::median(group_2_values),
-      p_value = p_value,
+      statistic = test_result$statistic,
+      p_value = test_result$p_value,
       stringsAsFactors = FALSE
     )
   }))
@@ -1033,6 +1029,26 @@ run_alpha_pairwise <- function(alpha_table, group, index, p_adjust_method = "BH"
   results$p_adjust_method <- p_adjust_method
   results$method <- "Wilcoxon rank sum test"
   results
+}
+
+alpha_wilcox_pairwise_result <- function(group_1_values, group_2_values) {
+  result <- tryCatch(
+    suppressWarnings(stats::wilcox.test(
+      group_1_values,
+      group_2_values,
+      exact = FALSE
+    )),
+    error = function(error) NULL
+  )
+
+  if (is.null(result)) {
+    return(list(statistic = NA_real_, p_value = NA_real_))
+  }
+
+  list(
+    statistic = unname(result$statistic),
+    p_value = unname(result$p.value)
+  )
 }
 
 valid_alpha_test_data <- function(alpha_table, group, index) {

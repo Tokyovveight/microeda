@@ -10,7 +10,8 @@ as_alpha_pairwise(x)
 \item{x}{A \code{microeda_alpha_compare} object.}
 }
 \value{
-A data frame of pairwise Wilcoxon test results.
+A data frame of pairwise Wilcoxon test results, including the
+Wilcoxon test statistic.
 }
 \description{
 Extract the pairwise alpha-diversity comparison table from
