@@ -363,6 +363,75 @@ as_alpha_pairwise <- function(x) {
   x$pairwise
 }
 
+#' Build a compact alpha diversity report
+#'
+#' `microeda_alpha_report()` formats alpha diversity group summaries and,
+#' optionally, alpha group tests into a compact plain-text report. It does not
+#' change the machine-readable extractor tables returned by
+#' [as_alpha_summary()] or [as_alpha_tests()].
+#'
+#' @param x A `microeda_alpha` object.
+#' @param alpha_compare Optional `microeda_alpha_compare` object from
+#'   [microeda_alpha_compare()].
+#' @param digits Number of digits used when formatting numeric values.
+#'
+#' @return A single character string suitable for [cat()].
+#' @examples
+#' counts <- matrix(
+#'   c(
+#'     10, 0, 0, 5,
+#'     20, 0, 1, 0,
+#'     0, 4, 0, 0,
+#'     2, 3, 0, 1
+#'   ),
+#'   nrow = 4,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- paste0("S", 1:4)
+#' colnames(counts) <- paste0("ASV", 1:4)
+#' metadata <- data.frame(group = c("A", "A", "B", "B"), row.names = rownames(counts))
+#'
+#' alpha <- microeda_alpha(
+#'   counts,
+#'   metadata = metadata,
+#'   group = "group",
+#'   taxa_are_rows = FALSE
+#' )
+#' alpha_cmp <- microeda_alpha_compare(alpha, indices = c("observed", "shannon"))
+#' cat(microeda_alpha_report(alpha, alpha_compare = alpha_cmp))
+#' @export
+microeda_alpha_report <- function(x, alpha_compare = NULL, digits = 3) {
+  if (!inherits(x, "microeda_alpha")) {
+    stop("`x` must be a microeda_alpha object.", call. = FALSE)
+  }
+
+  digits <- validate_alpha_report_digits(digits)
+
+  lines <- c(
+    "microeda alpha report",
+    "---------------------",
+    "",
+    alpha_summary_report_lines(as_alpha_summary(x), digits = digits)
+  )
+
+  if (!is.null(alpha_compare)) {
+    if (!inherits(alpha_compare, "microeda_alpha_compare")) {
+      stop(
+        "`alpha_compare` must be a microeda_alpha_compare object.",
+        call. = FALSE
+      )
+    }
+
+    lines <- c(
+      lines,
+      "",
+      alpha_tests_report_lines(as_alpha_tests(alpha_compare), digits = digits)
+    )
+  }
+
+  paste(lines, collapse = "\n")
+}
+
 #' Build a compact alpha pairwise comparison report
 #'
 #' `microeda_alpha_pairwise_report()` turns the pairwise comparison table from a
@@ -412,6 +481,108 @@ microeda_alpha_pairwise_report <- function(x) {
   section_text <- vapply(sections, paste, character(1), collapse = "\n")
 
   paste(section_text, collapse = "\n\n")
+}
+
+validate_alpha_report_digits <- function(digits) {
+  if (!is.numeric(digits) || length(digits) != 1 || is.na(digits) ||
+      !is.finite(digits) || digits < 0 || digits != floor(digits)) {
+    stop("`digits` must be a single non-negative whole number.", call. = FALSE)
+  }
+
+  as.integer(digits)
+}
+
+alpha_summary_report_lines <- function(summary, digits) {
+  lines <- "Alpha diversity summary"
+  if (nrow(summary) == 0) {
+    return(c(
+      lines,
+      "- No alpha group summaries are available. Supply `group` to microeda_alpha()."
+    ))
+  }
+
+  sections <- lapply(unique(summary$index), function(index_name) {
+    rows <- summary[summary$index == index_name, , drop = FALSE]
+    table <- rows[c("group", "n", "mean", "sd", "median", "q1", "q3")]
+    table <- alpha_report_format_numeric_columns(
+      table,
+      columns = c("mean", "sd", "median", "q1", "q3"),
+      digits = digits
+    )
+
+    c(
+      "",
+      paste0("Index: ", index_name),
+      alpha_report_table_lines(table)
+    )
+  })
+
+  c(lines, unlist(sections, use.names = FALSE))
+}
+
+alpha_tests_report_lines <- function(tests, digits) {
+  lines <- "Alpha group tests"
+  if (nrow(tests) == 0) {
+    return(c(lines, "- No alpha group tests are available."))
+  }
+
+  p_for_significance <- tests$p_value_adjusted
+  use_raw_p <- is.na(p_for_significance)
+  p_for_significance[use_raw_p] <- tests$p_value[use_raw_p]
+
+  table <- data.frame(
+    index = tests$index,
+    method = tests$method,
+    n = tests$n,
+    n_groups = tests$n_groups,
+    statistic = tests$statistic,
+    p = tests$p_value,
+    p.adj = tests$p_value_adjusted,
+    p.adj.signif = alpha_pairwise_p_significance(p_for_significance),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  table <- alpha_report_format_numeric_columns(
+    table,
+    columns = c("statistic", "p", "p.adj"),
+    digits = digits
+  )
+
+  c(lines, alpha_report_table_lines(table))
+}
+
+alpha_report_format_numeric_columns <- function(x, columns, digits) {
+  for (column in columns) {
+    x[[column]] <- alpha_report_format_number(x[[column]], digits = digits)
+  }
+
+  x
+}
+
+alpha_report_format_number <- function(x, digits) {
+  out <- rep(NA_character_, length(x))
+  missing <- is.na(x)
+  finite <- !missing & is.finite(x)
+  threshold <- 10^-digits
+  small <- finite & x > 0 & x < threshold
+  regular <- finite & !small
+
+  out[missing] <- "NA"
+  out[small] <- paste0(
+    "<",
+    format(threshold, trim = TRUE, scientific = FALSE)
+  )
+  out[regular] <- format(
+    round(x[regular], digits = digits),
+    trim = TRUE,
+    scientific = FALSE
+  )
+  out[!missing & !finite] <- as.character(x[!missing & !finite])
+  out
+}
+
+alpha_report_table_lines <- function(x) {
+  utils::capture.output(print(x, row.names = FALSE, right = FALSE))
 }
 
 validate_alpha_plot_type <- function(type) {

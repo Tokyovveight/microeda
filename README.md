@@ -145,6 +145,7 @@ alpha_cmp <- microeda_alpha_compare(alpha, group = "group")
 alpha_cmp
 as_alpha_tests(alpha_cmp)
 as_alpha_pairwise(alpha_cmp)
+cat(microeda_alpha_report(alpha, alpha_compare = alpha_cmp))
 microeda_alpha_pairwise_report(alpha_cmp)
 ```
 
