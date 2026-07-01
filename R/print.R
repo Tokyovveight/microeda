@@ -333,6 +333,12 @@ print.microeda_qc <- function(x, ...) {
     "\n",
     sep = ""
   )
+  cat(
+    "Top 10 reads:      ",
+    format_percent(x$feature_dominance$top_10_read_fraction),
+    "\n",
+    sep = ""
+  )
 
   if (!is.null(x$per_rank)) {
     cat("Per-rank:         ", nrow(x$per_rank), " ranks\n", sep = "")
@@ -367,8 +373,8 @@ print.microeda_qc <- function(x, ...) {
 
   cat(
     "\nUse x$per_sample, x$per_feature, x$library_size_summary, ",
-    "x$sparsity_summary, x$prevalence_summary, x$per_rank, ",
-    "x$metadata_completeness, x$qc_observations.\n",
+    "x$sparsity_summary, x$prevalence_summary, x$feature_dominance, ",
+    "x$per_rank, x$metadata_completeness, x$qc_observations.\n",
     sep = ""
   )
   invisible(x)

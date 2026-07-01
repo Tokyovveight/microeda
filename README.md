@@ -78,6 +78,7 @@ qc <- microeda_qc(
 qc
 qc$per_sample
 qc$per_feature
+qc$feature_dominance
 qc$per_rank
 qc$metadata_completeness
 as_qc_summary(qc)
@@ -96,8 +97,8 @@ cat(microeda_qc_report(
 ))
 ```
 
-`microeda_qc()` returns structured diagnostics for samples, features,
-taxonomy ranks, and metadata completeness.
+`microeda_qc()` returns structured diagnostics for samples, features, feature
+read dominance, taxonomy ranks, and metadata completeness.
 `as_qc_summary()` returns a compact data frame for reports, README-style
 summaries, or downstream display.
 `as_qc_issues()` returns a compact data frame of QC flags and observations for

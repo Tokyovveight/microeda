@@ -27,6 +27,9 @@
 #'     \item{`prevalence_summary`}{A named list with compact prevalence and
 #'       filtering diagnostics, including features above and below the
 #'       `min_prevalence` threshold.}
+#'     \item{`feature_dominance`}{A named list with read fractions explained by
+#'       the top 10, 50, and 100 features, plus feature counts needed to explain
+#'       at least 50% and 90% of reads.}
 #'     \item{`qc_flags`}{A data frame of conservative QC flags. Empty when no
 #'       simple library-size, sparsity, or prevalence flags are triggered.}
 #'     \item{`qc_observations`}{A data frame of concise human-readable QC
@@ -64,6 +67,7 @@ microeda_qc <- function(x,
     min_prevalence = min_prevalence,
     n_samples = nrow(counts)
   )
+  feature_dominance <- .qc_feature_dominance(counts)
   qc_flags <- .qc_flags(
     library_size_summary,
     sparsity_summary,
@@ -87,6 +91,7 @@ microeda_qc <- function(x,
       library_size_summary = library_size_summary,
       sparsity_summary = sparsity_summary,
       prevalence_summary = prevalence_summary,
+      feature_dominance = feature_dominance,
       qc_flags = qc_flags,
       qc_observations = qc_observations,
       per_rank = per_rank,
@@ -169,6 +174,31 @@ as_qc_summary <- function(x, include_observations = TRUE) {
       "prevalence", "features_detected_in_one_sample",
       x$prevalence_summary$n_features_detected_in_one_sample,
       "Features detected in only one sample."
+    ),
+    .qc_summary_row(
+      "feature_dominance", "top_10_read_fraction",
+      x$feature_dominance$top_10_read_fraction,
+      "Fraction of total reads in the 10 most abundant features."
+    ),
+    .qc_summary_row(
+      "feature_dominance", "top_50_read_fraction",
+      x$feature_dominance$top_50_read_fraction,
+      "Fraction of total reads in the 50 most abundant features."
+    ),
+    .qc_summary_row(
+      "feature_dominance", "top_100_read_fraction",
+      x$feature_dominance$top_100_read_fraction,
+      "Fraction of total reads in the 100 most abundant features."
+    ),
+    .qc_summary_row(
+      "feature_dominance", "features_for_50_percent_reads",
+      x$feature_dominance$features_for_50_percent_reads,
+      "Number of top-abundance features needed to explain at least 50% of reads."
+    ),
+    .qc_summary_row(
+      "feature_dominance", "features_for_90_percent_reads",
+      x$feature_dominance$features_for_90_percent_reads,
+      "Number of top-abundance features needed to explain at least 90% of reads."
     ),
     .qc_summary_row(
       "flags", "n_qc_flags", nrow(x$qc_flags),
@@ -289,7 +319,10 @@ microeda_qc_report <- function(x,
       " zeros overall; ",
       x$sparsity_summary$zero_abundance_features,
       " zero-abundance feature(s)."
-    )
+    ),
+    "",
+    "Feature dominance:",
+    .qc_feature_dominance_report_lines(x$feature_dominance)
   )
 
   if (isTRUE(include_flags)) {
@@ -346,6 +379,52 @@ microeda_qc_report <- function(x,
     observations$observation_id,
     ": ",
     observations$message
+  )
+}
+
+.qc_feature_dominance_report_lines <- function(feature_dominance) {
+  c(
+    paste0(
+      "- Top 10 feature(s): ",
+      .qc_format_percent(feature_dominance$top_10_read_fraction),
+      " of reads."
+    ),
+    paste0(
+      "- Top 50 feature(s): ",
+      .qc_format_percent(feature_dominance$top_50_read_fraction),
+      " of reads."
+    ),
+    paste0(
+      "- Top 100 feature(s): ",
+      .qc_format_percent(feature_dominance$top_100_read_fraction),
+      " of reads."
+    ),
+    .qc_feature_dominance_coverage_line(
+      feature_dominance$features_for_50_percent_reads,
+      "50%"
+    ),
+    .qc_feature_dominance_coverage_line(
+      feature_dominance$features_for_90_percent_reads,
+      "90%"
+    )
+  )
+}
+
+.qc_feature_dominance_coverage_line <- function(n_features, threshold) {
+  if (is.na(n_features)) {
+    return(paste0(
+      "- Feature coverage for ",
+      threshold,
+      " of reads is unavailable because total reads are zero."
+    ))
+  }
+
+  paste0(
+    "- ",
+    n_features,
+    " feature(s) account for at least ",
+    threshold,
+    " of reads."
   )
 }
 
@@ -753,6 +832,55 @@ microeda_qc_plot <- function(x, type = "library_size", ...) {
       n_features
     )
   )
+}
+
+.qc_feature_dominance <- function(counts) {
+  feature_totals <- sort(colSums(counts), decreasing = TRUE)
+  total_reads <- unname(sum(feature_totals))
+
+  list(
+    top_10_read_fraction = .qc_top_feature_read_fraction(
+      feature_totals,
+      total_reads,
+      n = 10
+    ),
+    top_50_read_fraction = .qc_top_feature_read_fraction(
+      feature_totals,
+      total_reads,
+      n = 50
+    ),
+    top_100_read_fraction = .qc_top_feature_read_fraction(
+      feature_totals,
+      total_reads,
+      n = 100
+    ),
+    features_for_50_percent_reads = .qc_features_for_read_fraction(
+      feature_totals,
+      total_reads,
+      target_fraction = 0.5
+    ),
+    features_for_90_percent_reads = .qc_features_for_read_fraction(
+      feature_totals,
+      total_reads,
+      target_fraction = 0.9
+    )
+  )
+}
+
+.qc_top_feature_read_fraction <- function(feature_totals, total_reads, n) {
+  n_used <- min(n, length(feature_totals))
+  .qc_safe_ratio(sum(feature_totals[seq_len(n_used)]), total_reads)
+}
+
+.qc_features_for_read_fraction <- function(feature_totals,
+                                           total_reads,
+                                           target_fraction) {
+  if (is.na(total_reads) || total_reads <= 0) {
+    return(NA_integer_)
+  }
+
+  cumulative_fraction <- cumsum(feature_totals) / total_reads
+  as.integer(which(cumulative_fraction >= target_fraction)[1])
 }
 
 .qc_library_size_summary <- function(counts) {

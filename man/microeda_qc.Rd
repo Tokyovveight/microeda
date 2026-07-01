@@ -50,6 +50,9 @@ zero fractions.}
 \item{\code{prevalence_summary}}{A named list with compact prevalence and
 filtering diagnostics, including features above and below the
 \code{min_prevalence} threshold.}
+\item{\code{feature_dominance}}{A named list with read fractions explained by
+the top 10, 50, and 100 features, plus feature counts needed to explain
+at least 50\% and 90\% of reads.}
 \item{\code{qc_flags}}{A data frame of conservative QC flags. Empty when no
 simple library-size, sparsity, or prevalence flags are triggered.}
 \item{\code{qc_observations}}{A data frame of concise human-readable QC

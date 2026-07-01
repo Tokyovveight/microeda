@@ -4,6 +4,8 @@
   and metadata-completeness diagnostics.
 * Added compact library-size and sparsity diagnostics to `microeda_qc()`.
 * Added compact prevalence and filtering diagnostics to `microeda_qc()`.
+* Added feature read dominance diagnostics to `microeda_qc()` summaries and
+  reports.
 * Added human-readable QC observations to `microeda_qc()`.
 * Added `as_qc_summary()` for compact QC display tables.
 * Added `as_qc_issues()` for tabular QC flags and observations.

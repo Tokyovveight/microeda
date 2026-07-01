@@ -33,7 +33,7 @@ test_that("microeda_qc builds per-sample and per-feature tables from a matrix", 
   expect_equal(qc$per_feature$total_reads, c(32, 7, 1, 6))
   expect_true(all(c(
     "library_size_summary", "sparsity_summary", "prevalence_summary",
-    "qc_flags"
+    "feature_dominance", "qc_flags"
   ) %in% names(qc)))
   expect_equal(qc$library_size_summary$n_samples, 4)
   expect_equal(qc$library_size_summary$total_reads, 46)
@@ -65,6 +65,57 @@ test_that("microeda_qc builds per-sample and per-feature tables from a matrix", 
     0.25
   )
   expect_equal(nrow(qc$qc_flags), 0)
+})
+
+test_that("microeda_qc summarizes feature read dominance", {
+  counts <- matrix(
+    c(
+      50, 20, 0, 0,
+      10, 20, 0, 0
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), paste0("f", 1:4))
+  )
+
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+  dominance <- qc$feature_dominance
+  fractions <- unlist(
+    dominance[c(
+      "top_10_read_fraction",
+      "top_50_read_fraction",
+      "top_100_read_fraction"
+    )],
+    use.names = FALSE
+  )
+  coverage_counts <- unlist(
+    dominance[c(
+      "features_for_50_percent_reads",
+      "features_for_90_percent_reads"
+    )],
+    use.names = FALSE
+  )
+
+  expect_named(
+    dominance,
+    c(
+      "top_10_read_fraction",
+      "top_50_read_fraction",
+      "top_100_read_fraction",
+      "features_for_50_percent_reads",
+      "features_for_90_percent_reads"
+    )
+  )
+  expect_type(fractions, "double")
+  expect_true(all(is.finite(fractions)))
+  expect_true(all(fractions >= 0 & fractions <= 1))
+  expect_equal(dominance$top_10_read_fraction, 1)
+  expect_equal(dominance$top_50_read_fraction, 1)
+  expect_equal(dominance$top_100_read_fraction, 1)
+  expect_type(coverage_counts, "integer")
+  expect_true(all(coverage_counts > 0))
+  expect_equal(dominance$features_for_50_percent_reads, 1L)
+  expect_equal(dominance$features_for_90_percent_reads, 2L)
 })
 
 test_that("microeda_qc records parameters and call", {
@@ -120,12 +171,19 @@ test_that("as_qc_summary returns compact core metrics", {
     "features_above_min_prevalence",
     "features_below_min_prevalence",
     "features_detected_in_one_sample",
+    "top_10_read_fraction",
+    "top_50_read_fraction",
+    "top_100_read_fraction",
+    "features_for_50_percent_reads",
+    "features_for_90_percent_reads",
     "n_qc_flags",
     "n_warning_observations"
   ) %in% summary$metric))
   expect_equal(summary$value[summary$metric == "n_samples"], "2")
   expect_equal(summary$value[summary$metric == "n_features"], "3")
   expect_equal(summary$value[summary$metric == "total_reads"], "16")
+  expect_equal(summary$value[summary$metric == "top_50_read_fraction"], "1")
+  expect_equal(summary$value[summary$metric == "top_100_read_fraction"], "1")
   expect_false(any(grepl("^observation_", summary$section)))
 })
 
@@ -245,6 +303,12 @@ test_that("microeda_qc_report returns compact text for QC objects", {
   expect_match(report, "Features: 3", fixed = TRUE)
   expect_match(report, "Total reads: 16", fixed = TRUE)
   expect_match(report, "Sparsity:", fixed = TRUE)
+  expect_match(report, "Feature dominance:", fixed = TRUE)
+  expect_match(report, "Top 10 feature(s):", fixed = TRUE)
+  expect_match(report, "Top 50 feature(s):", fixed = TRUE)
+  expect_match(report, "Top 100 feature(s):", fixed = TRUE)
+  expect_match(report, "50% of reads", fixed = TRUE)
+  expect_match(report, "90% of reads", fixed = TRUE)
   expect_match(report, "QC flags:", fixed = TRUE)
   expect_match(report, "QC observations:", fixed = TRUE)
   expect_match(report, "many_single_sample_features", fixed = TRUE)
@@ -714,6 +778,7 @@ test_that("microeda_qc handles all-zero libraries without Inf or NaN ratios", {
   expect_true(all(is.na(ratios)))
   expect_false(any(is.infinite(ratios)))
   expect_false(any(is.nan(ratios)))
+  expect_true(all(is.na(unlist(qc$feature_dominance, use.names = FALSE))))
   expect_equal(qc$sparsity_summary$overall_zero_fraction, 1)
   expect_equal(qc$sparsity_summary$zero_abundance_features, 2)
   expect_equal(qc$prevalence_summary$n_features_above_threshold, 0)
