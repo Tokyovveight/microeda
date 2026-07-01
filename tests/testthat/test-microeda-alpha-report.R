@@ -60,6 +60,12 @@ test_that("microeda_alpha_report includes compact alpha group tests", {
   expect_match(report, "p.adj", fixed = TRUE)
   expect_match(report, "p.adj.signif", fixed = TRUE)
   expect_match(report, "ns", fixed = TRUE)
+
+  lines <- strsplit(report, "\n", fixed = TRUE)[[1]]
+  expect_true(any(grepl(
+    "^index\\s+method\\s+n\\s+n_groups\\s+statistic\\s+p\\s+p\\.adj\\s+p\\.adj\\.signif$",
+    lines
+  )))
 })
 
 test_that("alpha report leaves extractor tables unchanged", {

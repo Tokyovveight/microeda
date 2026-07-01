@@ -583,7 +583,28 @@ alpha_report_format_number <- function(x, digits) {
 }
 
 alpha_report_table_lines <- function(x) {
-  utils::capture.output(print(x, row.names = FALSE, right = FALSE))
+  values <- as.data.frame(x, stringsAsFactors = FALSE)
+  values[] <- lapply(values, as.character)
+  headers <- names(values)
+  widths <- vapply(seq_along(values), function(i) {
+    max(nchar(c(headers[i], values[[i]]), type = "width"), na.rm = TRUE)
+  }, integer(1))
+
+  format_row <- function(row_values) {
+    paste(
+      vapply(seq_along(row_values), function(i) {
+        format(row_values[[i]], width = widths[i], justify = "left")
+      }, character(1)),
+      collapse = " "
+    )
+  }
+
+  c(
+    format_row(headers),
+    vapply(seq_len(nrow(values)), function(i) {
+      format_row(unname(values[i, , drop = TRUE]))
+    }, character(1))
+  )
 }
 
 validate_alpha_plot_type <- function(type) {

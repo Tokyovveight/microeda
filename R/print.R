@@ -318,7 +318,7 @@ print.microeda_qc <- function(x, ...) {
     sep = ""
   )
   cat(
-    "One-sample taxa:   ",
+    "One-sample features: ",
     x$prevalence_summary$n_features_detected_in_one_sample,
     " (",
     format_percent(
@@ -334,7 +334,7 @@ print.microeda_qc <- function(x, ...) {
     sep = ""
   )
   cat(
-    "Top 10 reads:      ",
+    "Top 10 feature reads: ",
     format_percent(x$feature_dominance$top_10_read_fraction),
     "\n",
     sep = ""

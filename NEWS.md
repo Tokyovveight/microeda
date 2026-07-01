@@ -28,6 +28,7 @@
   rstatix-style columns and significance labels.
 * Added Wilcoxon statistics to `as_alpha_pairwise()` and
   `microeda_alpha_pairwise_report()`.
+* Improved QC and alpha text-report labels and fixed-width table formatting.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.

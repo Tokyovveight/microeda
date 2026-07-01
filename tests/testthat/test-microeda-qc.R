@@ -445,6 +445,26 @@ test_that("microeda_qc_report validates input", {
   )
 })
 
+test_that("microeda_qc print output uses feature labels", {
+  counts <- matrix(
+    c(
+      10, 0, 0,
+      0, 5, 1
+    ),
+    nrow = 2,
+    byrow = TRUE,
+    dimnames = list(c("s1", "s2"), c("f1", "f2", "f3"))
+  )
+  qc <- microeda_qc(counts, taxa_are_rows = FALSE)
+
+  output <- capture.output(print(qc))
+
+  expect_true(any(grepl("One-sample features:", output, fixed = TRUE)))
+  expect_false(any(grepl("One-sample taxa:", output, fixed = TRUE)))
+  expect_true(any(grepl("Top 10 feature reads:", output, fixed = TRUE)))
+  expect_false(any(grepl("Top 10 reads:", output, fixed = TRUE)))
+})
+
 test_that("microeda_qc_write_report writes reports and returns paths invisibly", {
   counts <- matrix(
     c(
