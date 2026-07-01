@@ -489,6 +489,61 @@ test_that("microeda_alpha_compare runs omnibus and pairwise tests", {
   expect_true(nrow(as_alpha_pairwise(comparison)) > 0)
 })
 
+test_that("as_alpha_pairwise keeps stable raw extractor columns", {
+  counts <- matrix(
+    c(
+      10, 0, 0, 5,
+      20, 0, 1, 0,
+      0, 4, 0, 0,
+      2, 3, 0, 1,
+      10, 8, 7, 6,
+      1, 0, 0, 0
+    ),
+    nrow = 6,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(6))
+  colnames(counts) <- paste0("ASV", seq_len(4))
+  metadata <- data.frame(
+    group = c("A", "A", "B", "B", "C", "C"),
+    row.names = rownames(counts)
+  )
+
+  alpha <- microeda_alpha(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  comparison <- microeda_alpha_compare(
+    alpha,
+    group = "group",
+    indices = "observed"
+  )
+  pairwise <- as_alpha_pairwise(comparison)
+
+  expect_s3_class(pairwise, "data.frame")
+  expect_named(
+    pairwise,
+    c(
+      "index",
+      "group_1",
+      "group_2",
+      "n_1",
+      "n_2",
+      "median_1",
+      "median_2",
+      "median_difference",
+      "p_value",
+      "p_value_adjusted",
+      "p_adjust_method",
+      "method"
+    )
+  )
+  expect_type(pairwise$n_1, "integer")
+  expect_type(pairwise$n_2, "integer")
+})
+
 test_that("microeda_alpha_pairwise_report returns grouped compact text", {
   counts <- matrix(
     c(
@@ -545,10 +600,12 @@ test_that("microeda_alpha_pairwise_report returns grouped compact text", {
     "group2",
     "n1",
     "n2",
+    "statistic",
     "p",
     "p.adj",
     "p.adj.signif"
   ) %in% strsplit(report, "\\s+")[[1]]))
+  expect_true(any(grepl("^={10,}$", strsplit(report, "\n", fixed = TRUE)[[1]])))
 })
 
 test_that("microeda_alpha_pairwise_report assigns adjusted p-value stars", {
@@ -581,6 +638,33 @@ test_that("microeda_alpha_pairwise_report assigns adjusted p-value stars", {
   expect_true(any(grepl("A4\\s+B4.*\\*\\s*$", lines)))
   expect_true(any(grepl("A5\\s+B5.*ns\\s*$", lines)))
   expect_true(any(grepl("A6\\s+B6.*<NA>\\s*$", lines)))
+})
+
+test_that("microeda_alpha_pairwise_report falls back to raw p for significance", {
+  pairwise <- data.frame(
+    index = "shannon",
+    group_1 = "A",
+    group_2 = "B",
+    n_1 = 2L,
+    n_2 = 2L,
+    median_1 = 1,
+    median_2 = 2,
+    median_difference = -1,
+    p_value = 0.01,
+    p_value_adjusted = NA_real_,
+    p_adjust_method = "BH",
+    method = "Wilcoxon rank sum test",
+    stringsAsFactors = FALSE
+  )
+  comparison <- structure(
+    list(pairwise = pairwise),
+    class = "microeda_alpha_compare"
+  )
+
+  report <- microeda_alpha_pairwise_report(comparison)
+
+  expect_match(report, "p.adj.signif", fixed = TRUE)
+  expect_match(report, "\\*\\*")
 })
 
 test_that("microeda_alpha_pairwise_report handles empty pairwise comparisons", {

@@ -24,6 +24,8 @@
 * Added grouped boxplot support to `microeda_alpha_plot()`.
 * Added `microeda_alpha_report()` for compact plain-text alpha diversity
   summaries and group-test reports.
+* Improved `microeda_alpha_pairwise_report()` readability with compact
+  rstatix-style columns and significance labels.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.

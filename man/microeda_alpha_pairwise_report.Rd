@@ -39,5 +39,5 @@ alpha <- microeda_alpha(
   taxa_are_rows = FALSE
 )
 alpha_cmp <- microeda_alpha_compare(alpha, group = "group", indices = "shannon")
-microeda_alpha_pairwise_report(alpha_cmp)
+cat(microeda_alpha_pairwise_report(alpha_cmp))
 }

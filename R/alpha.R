@@ -463,7 +463,7 @@ microeda_alpha_report <- function(x, alpha_compare = NULL, digits = 3) {
 #'   taxa_are_rows = FALSE
 #' )
 #' alpha_cmp <- microeda_alpha_compare(alpha, group = "group", indices = "shannon")
-#' microeda_alpha_pairwise_report(alpha_cmp)
+#' cat(microeda_alpha_pairwise_report(alpha_cmp))
 #' @export
 microeda_alpha_pairwise_report <- function(x) {
   if (!inherits(x, "microeda_alpha_compare")) {
@@ -878,22 +878,38 @@ alpha_pairwise_report_section <- function(pairwise) {
     paste("Pairwise comparisons for:", index),
     paste0("Test: ", method[1], " | p-adjust: ", p_adjust_method[1]),
     separator,
-    table_lines
+    table_lines,
+    separator
   )
 }
 
 alpha_pairwise_report_table <- function(pairwise) {
+  p_for_significance <- pairwise$p_value_adjusted
+  use_raw_p <- is.na(p_for_significance)
+  p_for_significance[use_raw_p] <- pairwise$p_value[use_raw_p]
+
   data.frame(
     group1 = pairwise$group_1,
     group2 = pairwise$group_2,
     n1 = pairwise$n_1,
     n2 = pairwise$n_2,
-    p = pairwise$p_value,
-    p.adj = pairwise$p_value_adjusted,
-    p.adj.signif = alpha_pairwise_p_significance(pairwise$p_value_adjusted),
+    # The raw pairwise extractor does not currently store the Wilcoxon
+    # statistic; keep the report descriptive without rerunning tests here.
+    statistic = alpha_pairwise_report_statistic(pairwise),
+    p = alpha_report_format_number(pairwise$p_value, digits = 3),
+    p.adj = alpha_report_format_number(pairwise$p_value_adjusted, digits = 3),
+    p.adj.signif = alpha_pairwise_p_significance(p_for_significance),
     check.names = FALSE,
     stringsAsFactors = FALSE
   )
+}
+
+alpha_pairwise_report_statistic <- function(pairwise) {
+  if ("statistic" %in% names(pairwise)) {
+    return(alpha_report_format_number(pairwise$statistic, digits = 3))
+  }
+
+  rep("NA", nrow(pairwise))
 }
 
 alpha_pairwise_p_significance <- function(p) {
