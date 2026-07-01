@@ -209,6 +209,7 @@ as_beta_compare_group_summary <- function(x) {
 #' @param correlation_method Correlation method passed to
 #'   [as_beta_compare_distance_correlations()]. Supported values are
 #'   `"pearson"`, `"spearman"`, and `"kendall"`.
+#' @param digits Number of decimal places to use for numeric report values.
 #'
 #' @return A single character string.
 #' @examples
@@ -228,10 +229,13 @@ as_beta_compare_group_summary <- function(x) {
 #' microeda_beta_compare_report(beta_cmp)
 #' @export
 microeda_beta_compare_report <- function(x,
-                                         correlation_method = "spearman") {
+                                         correlation_method = "spearman",
+                                         digits = 3) {
   if (!inherits(x, "microeda_beta_compare")) {
     stop("`x` must be a microeda_beta_compare object.", call. = FALSE)
   }
+
+  digits <- validate_beta_report_digits(digits)
 
   correlations <- as_beta_compare_distance_correlations(
     x,
@@ -249,7 +253,7 @@ microeda_beta_compare_report <- function(x,
     paste0("Group: ", if (is.null(x$group)) "<none>" else x$group),
     "",
     "Method-level distance summary",
-    beta_compare_report_table(as_beta_compare_summary(x)),
+    beta_compare_report_table(as_beta_compare_summary(x), digits = digits),
     "",
     "Distance-method correlations"
   )
@@ -260,7 +264,7 @@ microeda_beta_compare_report <- function(x,
       "Distance-method correlations unavailable: fewer than two beta methods supplied."
     )
   } else {
-    lines <- c(lines, beta_compare_report_table(correlations))
+    lines <- c(lines, beta_compare_report_table(correlations, digits = digits))
   }
 
   lines <- c(
@@ -275,7 +279,13 @@ microeda_beta_compare_report <- function(x,
       "Group-level distance summary unavailable: no group metadata supplied."
     )
   } else {
-    lines <- c(lines, beta_compare_report_table(as_beta_compare_group_summary(x)))
+    lines <- c(
+      lines,
+      beta_compare_report_table(
+        as_beta_compare_group_summary(x),
+        digits = digits
+      )
+    )
   }
 
   lines <- c(
@@ -291,6 +301,15 @@ microeda_beta_compare_report <- function(x,
   )
 
   paste(lines, collapse = "\n")
+}
+
+validate_beta_report_digits <- function(digits) {
+  if (!is.numeric(digits) || length(digits) != 1 || is.na(digits) ||
+      !is.finite(digits) || digits < 0 || digits != floor(digits)) {
+    stop("`digits` must be a single non-negative whole number.", call. = FALSE)
+  }
+
+  as.integer(digits)
 }
 
 validate_beta_compare_methods <- function(methods) {
@@ -468,6 +487,64 @@ beta_empty_group_summary <- function() {
   )
 }
 
-beta_compare_report_table <- function(x) {
-  utils::capture.output(print(x, row.names = FALSE, right = FALSE))
+beta_compare_report_table <- function(x, digits) {
+  values <- beta_compare_format_report_table(x, digits = digits)
+  headers <- names(values)
+  widths <- vapply(seq_along(values), function(i) {
+    max(nchar(c(headers[i], values[[i]]), type = "width"), na.rm = TRUE)
+  }, integer(1))
+
+  format_row <- function(row_values) {
+    paste(
+      vapply(seq_along(row_values), function(i) {
+        format(row_values[[i]], width = widths[i], justify = "left")
+      }, character(1)),
+      collapse = " "
+    )
+  }
+
+  lines <- format_row(headers)
+  if (nrow(values) == 0) {
+    return(c(lines, "(no rows)"))
+  }
+
+  c(
+    lines,
+    vapply(seq_len(nrow(values)), function(i) {
+      format_row(unname(values[i, , drop = TRUE]))
+    }, character(1))
+  )
+}
+
+beta_compare_format_report_table <- function(x, digits) {
+  values <- as.data.frame(x, stringsAsFactors = FALSE)
+  for (column in names(values)) {
+    if (is.numeric(values[[column]])) {
+      values[[column]] <- beta_compare_report_format_number(
+        values[[column]],
+        digits = digits
+      )
+    }
+  }
+
+  values[] <- lapply(values, as.character)
+  values
+}
+
+beta_compare_report_format_number <- function(x, digits) {
+  out <- rep(NA_character_, length(x))
+  missing <- is.na(x)
+  finite <- !missing & is.finite(x)
+  whole <- finite & x == floor(x)
+  decimal <- finite & !whole
+
+  out[missing] <- "NA"
+  out[whole] <- format(x[whole], trim = TRUE, scientific = FALSE)
+  out[decimal] <- format(
+    round(x[decimal], digits = digits),
+    trim = TRUE,
+    scientific = FALSE
+  )
+  out[!missing & !finite] <- as.character(x[!missing & !finite])
+  out
 }

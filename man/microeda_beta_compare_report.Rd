@@ -4,7 +4,7 @@
 \alias{microeda_beta_compare_report}
 \title{Build a compact beta diversity method comparison report}
 \usage{
-microeda_beta_compare_report(x, correlation_method = "spearman")
+microeda_beta_compare_report(x, correlation_method = "spearman", digits = 3)
 }
 \arguments{
 \item{x}{A \code{microeda_beta_compare} object.}
@@ -12,6 +12,8 @@ microeda_beta_compare_report(x, correlation_method = "spearman")
 \item{correlation_method}{Correlation method passed to
 \code{\link[=as_beta_compare_distance_correlations]{as_beta_compare_distance_correlations()}}. Supported values are
 \code{"pearson"}, \code{"spearman"}, and \code{"kendall"}.}
+
+\item{digits}{Number of decimal places to use for numeric report values.}
 }
 \value{
 A single character string.

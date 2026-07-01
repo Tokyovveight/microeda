@@ -616,6 +616,57 @@ test_that("microeda_beta_compare_report returns compact grouped reports", {
   expect_match(report, "Formal method recommendation is not implemented yet.", fixed = TRUE)
 })
 
+test_that("microeda_beta_compare_report formats numeric report tables", {
+  counts <- matrix(
+    c(
+      5, 0, 0, 1,
+      4, 1, 0, 0,
+      0, 5, 1, 0,
+      0, 4, 2, 0,
+      1, 0, 5, 3,
+      0, 1, 4, 2
+    ),
+    nrow = 6,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(6))
+  colnames(counts) <- paste0("ASV", seq_len(4))
+  metadata <- data.frame(
+    group = c("A", "A", "B", "B", "C", "C"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  report <- microeda_beta_compare_report(beta_cmp, digits = 3)
+  lines <- strsplit(report, "\n", fixed = TRUE)[[1]]
+
+  expect_type(report, "character")
+  expect_length(report, 1)
+  expect_match(report, "Method-level distance summary", fixed = TRUE)
+  expect_match(report, "0.167", fixed = TRUE)
+  expect_false(grepl("0.1666667", report, fixed = TRUE))
+
+  method_header <- lines[grepl("n_samples", lines, fixed = TRUE)]
+  expect_length(method_header, 1)
+  expect_true(grepl("method", method_header, fixed = TRUE))
+  expect_true(grepl("n_pairs", method_header, fixed = TRUE))
+  expect_true(grepl("min_distance", method_header, fixed = TRUE))
+  expect_true(grepl("median_distance", method_header, fixed = TRUE))
+  expect_true(grepl("max_distance", method_header, fixed = TRUE))
+
+  correlation_header <- lines[grepl("method_1", lines, fixed = TRUE)]
+  expect_length(correlation_header, 1)
+  expect_true(grepl("method_2", correlation_header, fixed = TRUE))
+  expect_true(grepl("n_pairs", correlation_header, fixed = TRUE))
+  expect_true(grepl("correlation", correlation_header, fixed = TRUE))
+  expect_true(grepl("correlation_method", correlation_header, fixed = TRUE))
+})
+
 test_that("microeda_beta_compare_report handles ungrouped comparisons", {
   counts <- matrix(
     c(
@@ -657,6 +708,10 @@ test_that("microeda_beta_compare_report validates input", {
   expect_error(
     microeda_beta_compare_report(beta_cmp, correlation_method = "unknown"),
     "pearson.*spearman.*kendall"
+  )
+  expect_error(
+    microeda_beta_compare_report(beta_cmp, digits = -1),
+    "digits"
   )
 })
 
@@ -719,7 +774,78 @@ test_that("microeda_beta_compare prints compact summaries", {
   expect_true(any(grepl("Methods: +bray, jaccard, hellinger", output)))
   expect_true(any(grepl("Samples: +3", output)))
   expect_true(any(grepl("Group: +group", output)))
+  expect_true(any(grepl("microeda_beta_compare_report", output)))
   expect_true(any(grepl("as_beta_compare_summary", output)))
+})
+
+test_that("beta compare raw extractor columns stay stable", {
+  counts <- matrix(
+    c(
+      1, 2, 0,
+      2, 1, 0,
+      0, 0, 3
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
+  rownames(counts) <- c("S1", "S2", "S3")
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "B", "A"),
+    row.names = rownames(counts)
+  )
+
+  beta_cmp <- microeda_beta_compare(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+
+  expect_named(
+    as_beta_compare_summary(beta_cmp),
+    c(
+      "method",
+      "n_samples",
+      "n_pairs",
+      "min_distance",
+      "median_distance",
+      "max_distance"
+    )
+  )
+  expect_named(
+    as_beta_compare_distances(beta_cmp),
+    c(
+      "method",
+      "sample_1",
+      "sample_2",
+      "group_1",
+      "group_2",
+      "comparison",
+      "distance"
+    )
+  )
+  expect_named(
+    as_beta_compare_group_summary(beta_cmp),
+    c(
+      "method",
+      "comparison",
+      "n_pairs",
+      "min_distance",
+      "median_distance",
+      "max_distance"
+    )
+  )
+  expect_named(
+    as_beta_compare_distance_correlations(beta_cmp),
+    c(
+      "method_1",
+      "method_2",
+      "n_pairs",
+      "correlation",
+      "correlation_method"
+    )
+  )
 })
 
 test_that("beta_compare_rule_context returns stable internal context", {
