@@ -154,7 +154,8 @@ print.microeda_alpha <- function(x, ...) {
     cat("- ", note, "\n", sep = "")
   }
 
-  cat("\nUse as_alpha_table(x) for per-sample indices")
+  cat("\nUse microeda_alpha_report(x) for a readable alpha report.\n")
+  cat("Use as_alpha_table(x) for per-sample indices")
   if (nrow(x$group_summary) > 0) {
     cat(" and as_alpha_summary(x) for group summaries")
   }
@@ -209,7 +210,13 @@ print.microeda_alpha_compare <- function(x, ...) {
     cat("- ", note, "\n", sep = "")
   }
 
-  cat("\nUse as_alpha_tests(x) and as_alpha_pairwise(x) for result tables.\n")
+  cat(
+    "\nUse microeda_alpha_report(alpha, alpha_compare = x) ",
+    "for grouped test reporting.\n",
+    sep = ""
+  )
+  cat("Use microeda_alpha_pairwise_report(x) for pairwise comparison reporting.\n")
+  cat("Use as_alpha_tests(x) and as_alpha_pairwise(x) for result tables.\n")
   invisible(x)
 }
 
@@ -376,8 +383,9 @@ print.microeda_qc <- function(x, ...) {
     sep = ""
   )
 
+  cat("\nUse microeda_qc_report(x) for a readable QC report.\n")
   cat(
-    "\nUse x$per_sample, x$per_feature, x$library_size_summary, ",
+    "Use x$per_sample, x$per_feature, x$library_size_summary, ",
     "x$sparsity_summary, x$prevalence_summary, x$feature_dominance, ",
     "x$per_rank, x$metadata_completeness, x$qc_observations.\n",
     sep = ""

@@ -359,6 +359,40 @@ test_that("microeda_alpha computes classic and Hill alpha indices", {
   expect_true(nrow(as_alpha_summary(alpha)) > 0)
 })
 
+test_that("microeda_alpha print mentions readable report and extractors", {
+  counts <- matrix(
+    c(
+      10, 0, 0, 5,
+      20, 0, 1, 0,
+      0, 4, 0, 0,
+      2, 3, 0, 1
+    ),
+    nrow = 4,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(4))
+  colnames(counts) <- paste0("ASV", seq_len(4))
+
+  metadata <- data.frame(
+    group = c("A", "A", "B", "B"),
+    row.names = rownames(counts)
+  )
+
+  alpha <- microeda_alpha(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  output <- capture.output(result <- withVisible(print(alpha)))
+
+  expect_false(result$visible)
+  expect_identical(result$value, alpha)
+  expect_true(any(grepl("microeda_alpha_report", output, fixed = TRUE)))
+  expect_true(any(grepl("as_alpha_table", output, fixed = TRUE)))
+  expect_true(any(grepl("as_alpha_summary", output, fixed = TRUE)))
+})
+
 test_that("microeda_alpha_plot draws alpha metric barplots invisibly", {
   counts <- matrix(
     c(
@@ -577,6 +611,52 @@ test_that("microeda_alpha_compare runs omnibus and pairwise tests", {
   expect_true(all(c("p_value", "p_value_adjusted") %in% names(as_alpha_tests(comparison))))
   expect_true(nrow(as_alpha_pairwise(comparison)) > 0)
   expect_true("statistic" %in% names(as_alpha_pairwise(comparison)))
+})
+
+test_that("microeda_alpha_compare print mentions reports and extractors", {
+  counts <- matrix(
+    c(
+      10, 0, 0, 5,
+      20, 0, 1, 0,
+      0, 4, 0, 0,
+      2, 3, 0, 1,
+      10, 8, 7, 6,
+      1, 0, 0, 0
+    ),
+    nrow = 6,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(6))
+  colnames(counts) <- paste0("ASV", seq_len(4))
+
+  metadata <- data.frame(
+    group = c("A", "A", "B", "B", "C", "C"),
+    row.names = rownames(counts)
+  )
+
+  alpha <- microeda_alpha(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  comparison <- microeda_alpha_compare(
+    alpha,
+    group = "group",
+    indices = "observed"
+  )
+  output <- capture.output(result <- withVisible(print(comparison)))
+
+  expect_false(result$visible)
+  expect_identical(result$value, comparison)
+  expect_true(any(grepl("microeda_alpha_report", output, fixed = TRUE)))
+  expect_true(any(grepl(
+    "microeda_alpha_pairwise_report",
+    output,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl("as_alpha_tests", output, fixed = TRUE)))
+  expect_true(any(grepl("as_alpha_pairwise", output, fixed = TRUE)))
 })
 
 test_that("as_alpha_pairwise keeps stable raw extractor columns", {

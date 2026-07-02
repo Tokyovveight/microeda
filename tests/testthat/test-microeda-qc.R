@@ -457,12 +457,16 @@ test_that("microeda_qc print output uses feature labels", {
   )
   qc <- microeda_qc(counts, taxa_are_rows = FALSE)
 
-  output <- capture.output(print(qc))
+  output <- capture.output(result <- withVisible(print(qc)))
 
+  expect_false(result$visible)
+  expect_identical(result$value, qc)
   expect_true(any(grepl("One-sample features:", output, fixed = TRUE)))
   expect_false(any(grepl("One-sample taxa:", output, fixed = TRUE)))
   expect_true(any(grepl("Top 10 feature reads:", output, fixed = TRUE)))
   expect_false(any(grepl("Top 10 reads:", output, fixed = TRUE)))
+  expect_true(any(grepl("microeda_qc_report", output, fixed = TRUE)))
+  expect_true(any(grepl("x$per_sample", output, fixed = TRUE)))
 })
 
 test_that("microeda_qc_write_report writes reports and returns paths invisibly", {

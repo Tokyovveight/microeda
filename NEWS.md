@@ -33,6 +33,7 @@
 * Clarified generic recommendation presentation as broad screening notes.
 * Reworked README examples around a coherent check, QC, alpha, and beta
   workflow.
+* Improved QC and alpha print hints for human-readable report helpers.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.
