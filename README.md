@@ -1,30 +1,31 @@
 # microeda
 
-`microeda` is an early R package skeleton for evidence-guided exploratory
-analysis of microbiome count data.
+`microeda` is an R package for evidence-guided exploratory analysis of
+microbiome count data.
 
 The core idea is deliberately conservative:
 
-> inspect the data first, describe the risks, then recommend method families
-> with caveats and evidence instead of pretending there is one universal best
+> inspect the data first, describe statistical risks, then use method-specific
+> summaries and caveats instead of pretending there is one universal best
 > microbiome workflow.
 
-## MVP scope
+## Workflow Scope
 
 - Accept a `phyloseq` object or a plain count matrix plus metadata.
-- Summarize library sizes, sparsity, prevalence, metadata completeness, group
-  sizes, and taxonomy completeness.
-- Flag common microbiome EDA risks:
-  - compositional input and relative-abundance interpretation
-  - non-integer or transformed values used with count-based methods
-  - high zero fraction and low prevalence
-  - uneven sequencing depth
-  - low group sizes
-  - missing metadata or taxonomy ranks
+- Inspect input scale, library sizes, sparsity, prevalence, metadata
+  completeness, group sizes, taxonomy completeness, and feature read dominance.
+- Report alpha diversity summaries and exploratory group comparisons.
+- Compare Bray-Curtis, Jaccard, and Hellinger beta diversity views.
 - Keep broad screening notes with `rule_id`, `topic`, `severity`,
   `recommendation`, `caveat`, and `evidence`.
 
-## Example
+Compositional/log-ratio methods, PERMANOVA, dispersion tests, differential
+abundance methods, and formal method ranking are not implemented yet.
+
+## First Workflow
+
+Prepare a count table with samples as rows and features as columns, plus sample
+metadata and optional taxonomy.
 
 ```r
 counts <- matrix(
@@ -37,7 +38,6 @@ counts <- matrix(
   nrow = 4,
   byrow = TRUE
 )
-
 rownames(counts) <- paste0("S", 1:4)
 colnames(counts) <- paste0("ASV", 1:4)
 
@@ -47,26 +47,17 @@ metadata <- data.frame(
   row.names = rownames(counts)
 )
 
-report <- microeda_check(
-  counts,
-  metadata = metadata,
-  group = "group",
-  taxa_are_rows = FALSE
-)
-
-report
-```
-
-## QC summary
-
-```r
 taxonomy <- data.frame(
   Phylum = c("Firmicutes", "Firmicutes", "Bacteroidota", "Actinobacteriota"),
   Genus = c("Lactobacillus", "Streptococcus", "Bacteroides", "Bifidobacterium"),
   row.names = colnames(counts)
 )
+```
 
-qc <- microeda_qc(
+Start with compact input screening:
+
+```r
+check <- microeda_check(
   counts,
   metadata = metadata,
   taxonomy = taxonomy,
@@ -74,85 +65,82 @@ qc <- microeda_qc(
   taxa_are_rows = FALSE
 )
 
-qc
-qc$per_sample
-qc$per_feature
-qc$feature_dominance
-qc$per_rank
-qc$metadata_completeness
-as_qc_summary(qc)
-as_qc_summary(qc, include_observations = FALSE)
-as_qc_issues(qc)
-microeda_qc_plot(qc, type = "library_size")
-microeda_qc_plot(qc, type = "sparsity")
-microeda_qc_plot(qc, type = "feature_abundance")
-microeda_qc_plot(qc, type = "prevalence")
-cat(microeda_qc_report(qc))
-microeda_qc_write_report(qc, tempfile(fileext = ".txt"))
-cat(microeda_qc_report(
-  qc,
-  include_flags = FALSE,
-  include_observations = FALSE
-))
+check
 ```
 
-`microeda_qc()` returns structured diagnostics for samples, features, feature
-read dominance, taxonomy ranks, and metadata completeness.
-`as_qc_summary()` returns a compact data frame for reports, README-style
-summaries, or downstream display.
-`as_qc_issues()` returns a compact data frame of QC flags and observations for
-downstream display or reporting.
-`microeda_qc_report()` returns a compact text summary that can be used as a
-starting point for QC reports.
-`microeda_qc_write_report()` writes the compact text QC report to a file.
-`microeda_qc_plot()` currently supports base R library-size, sparsity,
-feature-abundance, and prevalence QC plots.
-The flags and observations lines can be omitted for a shorter report.
-
-## Alpha diversity
+Then build the QC, alpha diversity, and beta diversity report layers:
 
 ```r
+qc <- microeda_qc(
+  counts,
+  metadata = metadata,
+  taxonomy = taxonomy,
+  group = "group",
+  taxa_are_rows = FALSE
+)
+cat(microeda_qc_report(qc))
+
 alpha <- microeda_alpha(
   counts,
   metadata = metadata,
   group = "group",
   taxa_are_rows = FALSE
 )
-
-alpha
-as_alpha_table(alpha)
-as_alpha_summary(alpha)
-microeda_alpha_plot(alpha)
-microeda_alpha_plot(alpha, type = "boxplot")
-microeda_alpha_plot(alpha, metric = "shannon", type = "boxplot", group = "group")
-```
-
-The alpha table includes classic indices (`observed`, `chao1`, `shannon`,
-`simpson`, `inverse_simpson`) and Hill/effective-diversity equivalents
-(`hill_q0`, `hill_q1`, `hill_q2`). In practice, `hill_q1 = exp(Shannon)` and
-`hill_q2 = inverse Simpson`, which makes the values easier to interpret as
-effective numbers of taxa.
-`microeda_alpha_plot()` supports base R per-sample barplots and grouped boxplots
-for alpha diversity metrics.
-
-Group comparisons are intentionally exploratory and include depth/coverage
-diagnostics:
-
-```r
 alpha_cmp <- microeda_alpha_compare(alpha, group = "group")
-
-alpha_cmp
-as_alpha_tests(alpha_cmp)
-as_alpha_pairwise(alpha_cmp)
 cat(microeda_alpha_report(alpha, alpha_compare = alpha_cmp))
 cat(microeda_alpha_pairwise_report(alpha_cmp))
+
+beta_cmp <- microeda_beta_compare(
+  counts,
+  metadata = metadata,
+  group = "group",
+  taxa_are_rows = FALSE
+)
+cat(microeda_beta_compare_report(beta_cmp))
 ```
 
-## Beta diversity
-
-### Single-method beta diversity
+For `phyloseq`, pass the object directly:
 
 ```r
+check <- microeda_check(ps, group = "Treatment")
+qc <- microeda_qc(ps, group = "Treatment")
+alpha <- microeda_alpha(ps, group = "Treatment")
+```
+
+## Human-Readable Reports
+
+Use these helpers when you want compact console or text output:
+
+```r
+cat(microeda_qc_report(qc))
+cat(microeda_alpha_report(alpha, alpha_compare = alpha_cmp))
+cat(microeda_alpha_pairwise_report(alpha_cmp))
+cat(microeda_beta_compare_report(beta_cmp))
+microeda_qc_write_report(qc, tempfile(fileext = ".txt"))
+```
+
+`microeda_qc_report()` summarizes samples, features, reads, sparsity, QC flags,
+observations, and feature dominance. `microeda_alpha_report()` formats alpha
+summaries and omnibus group tests by diversity index.
+`microeda_alpha_pairwise_report()` formats pairwise Wilcoxon comparisons with
+statistics and adjusted p-value labels. `microeda_beta_compare_report()`
+summarizes distance methods, method correlations, grouped distance summaries,
+and caveats.
+
+## Machine-Readable Extractors
+
+The `as_*()` helpers return data frames, matrices, or `dist` objects for
+downstream analysis and custom reporting.
+
+```r
+as_qc_summary(qc)
+as_qc_issues(qc)
+
+as_alpha_table(alpha)
+as_alpha_summary(alpha)
+as_alpha_tests(alpha_cmp)
+as_alpha_pairwise(alpha_cmp)
+
 beta_bray <- microeda_beta(
   counts,
   metadata = metadata,
@@ -160,100 +148,60 @@ beta_bray <- microeda_beta(
   taxa_are_rows = FALSE,
   method = "bray"
 )
-beta_jaccard <- microeda_beta(
-  counts,
-  metadata = metadata,
-  group = "group",
-  taxa_are_rows = FALSE,
-  method = "jaccard"
-)
-beta_hellinger <- microeda_beta(
-  counts,
-  metadata = metadata,
-  group = "group",
-  taxa_are_rows = FALSE,
-  method = "hellinger"
-)
-
-beta_bray
 as_beta_dist(beta_bray)
 as_beta_matrix(beta_bray)
 as_beta_samples(beta_bray)
-microeda_beta_plot(beta_bray)
-```
 
-### Beta method comparison
-
-```r
-beta_cmp <- microeda_beta_compare(
-  counts,
-  metadata = metadata,
-  group = "group",
-  taxa_are_rows = FALSE
-)
-
-beta_cmp
 as_beta_compare_summary(beta_cmp)
 as_beta_compare_distances(beta_cmp)
 as_beta_compare_group_summary(beta_cmp)
 as_beta_compare_distance_correlations(beta_cmp)
-cat(microeda_beta_compare_report(beta_cmp))
+```
+
+The alpha table includes classic indices (`observed`, `chao1`, `shannon`,
+`simpson`, `inverse_simpson`) and Hill/effective-diversity equivalents
+(`hill_q0`, `hill_q1`, `hill_q2`). In practice, `hill_q1 = exp(Shannon)` and
+`hill_q2 = inverse Simpson`, which makes the values easier to interpret as
+effective numbers of taxa.
+
+## Plots And Ordinations
+
+The current plotting helpers use base R.
+
+```r
+microeda_qc_plot(qc, type = "library_size")
+microeda_qc_plot(qc, type = "sparsity")
+microeda_qc_plot(qc, type = "feature_abundance")
+microeda_qc_plot(qc, type = "prevalence")
+
+microeda_alpha_plot(alpha)
+microeda_alpha_plot(alpha, type = "boxplot")
+microeda_alpha_plot(alpha, metric = "shannon", type = "boxplot", group = "group")
+
+microeda_beta_plot(beta_bray)
+
+ord <- microeda_beta_ordination(beta_bray)
+as_beta_coordinates(ord)
 
 ord_cmp <- microeda_beta_compare_ordination(beta_cmp)
-ord_cmp
 as_beta_compare_coordinates(ord_cmp)
 ```
 
-### Beta ordination
-
-```r
-ord <- microeda_beta_ordination(beta_bray)
-as_beta_coordinates(ord)
-```
-
-`microeda_beta()` currently provides base R Bray-Curtis, Jaccard, and
-Hellinger distances.
-Bray-Curtis uses abundance differences; Jaccard uses binary presence/absence;
-Hellinger uses square-root relative abundances followed by Euclidean distance.
-`as_beta_dist()` returns the stored `dist` object.
-`as_beta_matrix()` returns a square distance matrix.
-`as_beta_samples()` returns sample IDs and optional group labels.
-`microeda_beta_plot()` draws a base R distance heatmap.
-`microeda_beta_compare()` compares distance summaries across the currently
-implemented beta methods.
-`as_beta_compare_distances()` returns long-form pairwise distances for
-downstream summaries, reports, and plots.
-`as_beta_compare_group_summary()` summarizes within- and between-group
-distances for grouped comparisons.
-`as_beta_compare_distance_correlations()` describes how similarly different
-beta methods rank pairwise sample distances.
-These correlations are descriptive and do not replace PERMANOVA, dispersion
-checks, or compositional diagnostics.
-`microeda_beta_compare_report()` returns a compact text report combining
-method-level, distance-correlation, and grouped beta distance summaries.
-`microeda_beta_compare_ordination()` computes side-by-side PCoA coordinates
-across beta methods.
 PCoA coordinates are method-specific; axes from different distance methods are
 intended for side-by-side inspection, not direct axis-by-axis equivalence.
-`microeda_beta_ordination()` computes PCoA with base R `stats::cmdscale()`.
-Compositional/log-ratio methods are not implemented yet.
-PERMANOVA is not implemented yet.
-Formal method recommendation is not implemented yet.
 
-For `phyloseq`, pass the object directly:
+## Broad Screening Notes
+
+`as_recommendations(check)` extracts broad screening notes from
+`microeda_check()`. These notes are caveats for initial review, not contextual
+workflow recommendations, formal method ranking, or a substitute for the QC,
+alpha, and beta reports.
 
 ```r
-report <- microeda_check(ps, group = "Treatment")
-alpha <- microeda_alpha(ps, group = "Treatment")
-alpha_cmp <- microeda_alpha_compare(alpha)
+as_recommendations(check)
+microeda_rules()
 ```
-
-## Evidence rules
 
 The package keeps the current evidence map in
 `inst/extdata/evidence_rules.yml`. The R functions use a built-in version of
-the same rules so the MVP does not require a YAML parser at runtime.
-
-`as_recommendations(report)` extracts the current broad screening notes. These
-notes are caveats for initial review, not contextual workflow recommendations,
-formal method ranking, or a substitute for the QC, alpha, and beta reports.
+the same rules so the package does not require a YAML parser at runtime.
