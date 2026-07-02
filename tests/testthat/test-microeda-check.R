@@ -823,7 +823,8 @@ test_that("microeda_alpha_pairwise_report assigns adjusted p-value stars", {
   expect_true(any(grepl("A3\\s+B3.*\\*\\*\\s*$", lines)))
   expect_true(any(grepl("A4\\s+B4.*\\*\\s*$", lines)))
   expect_true(any(grepl("A5\\s+B5.*ns\\s*$", lines)))
-  expect_true(any(grepl("A6\\s+B6.*<NA>\\s*$", lines)))
+  expect_true(any(grepl("A6\\s+B6.*NA\\s*$", lines)))
+  expect_false(grepl("<NA>", report, fixed = TRUE))
 })
 
 test_that("microeda_alpha_pairwise_report falls back to raw p for significance", {

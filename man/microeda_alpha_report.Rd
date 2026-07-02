@@ -4,13 +4,16 @@
 \alias{microeda_alpha_report}
 \title{Build a compact alpha diversity report}
 \usage{
-microeda_alpha_report(x, alpha_compare = NULL, digits = 3)
+microeda_alpha_report(x, alpha_compare = NULL, indices = NULL, digits = 3)
 }
 \arguments{
 \item{x}{A \code{microeda_alpha} object.}
 
 \item{alpha_compare}{Optional \code{microeda_alpha_compare} object from
 \code{\link[=microeda_alpha_compare]{microeda_alpha_compare()}}.}
+
+\item{indices}{Optional character vector of alpha diversity indices to
+include in the report. \code{NULL} includes all available report indices.}
 
 \item{digits}{Number of digits used when formatting numeric values.}
 }

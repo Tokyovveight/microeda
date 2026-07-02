@@ -68,10 +68,58 @@ test_that("microeda_alpha_report includes compact alpha group tests", {
   )))
 })
 
+test_that("microeda_alpha_report filters summary indices", {
+  example <- alpha_report_example()
+  report <- microeda_alpha_report(example$alpha, indices = "shannon")
+
+  expect_match(report, "Alpha diversity summary", fixed = TRUE)
+  expect_match(report, "Index: shannon", fixed = TRUE)
+  expect_false(grepl("Index: observed", report, fixed = TRUE))
+  expect_false(grepl("Index: simpson", report, fixed = TRUE))
+})
+
+test_that("microeda_alpha_report filters group tests by indices", {
+  example <- alpha_report_example()
+  report <- microeda_alpha_report(
+    example$alpha,
+    alpha_compare = example$alpha_cmp,
+    indices = "shannon"
+  )
+  lines <- strsplit(report, "\n", fixed = TRUE)[[1]]
+  test_lines <- lines[grepl(
+    "^(observed|shannon|simpson)\\s+Kruskal-Wallis",
+    lines
+  )]
+
+  expect_match(report, "Index: shannon", fixed = TRUE)
+  expect_false(grepl("Index: observed", report, fixed = TRUE))
+  expect_false(grepl("Index: simpson", report, fixed = TRUE))
+  expect_equal(length(test_lines), 1L)
+  expect_true(grepl("^shannon\\s+", test_lines))
+})
+
+test_that("microeda_alpha_report keeps current behavior for NULL indices", {
+  example <- alpha_report_example()
+
+  expect_identical(
+    microeda_alpha_report(example$alpha),
+    microeda_alpha_report(example$alpha, indices = NULL)
+  )
+  expect_identical(
+    microeda_alpha_report(example$alpha, alpha_compare = example$alpha_cmp),
+    microeda_alpha_report(
+      example$alpha,
+      alpha_compare = example$alpha_cmp,
+      indices = NULL
+    )
+  )
+})
+
 test_that("alpha report leaves extractor tables unchanged", {
   example <- alpha_report_example()
   summary <- as_alpha_summary(example$alpha)
   tests <- as_alpha_tests(example$alpha_cmp)
+  pairwise <- as_alpha_pairwise(example$alpha_cmp)
 
   expect_s3_class(summary, "data.frame")
   expect_named(
@@ -97,6 +145,25 @@ test_that("alpha report leaves extractor tables unchanged", {
       "p_adjust_method"
     )
   )
+  expect_s3_class(pairwise, "data.frame")
+  expect_named(
+    pairwise,
+    c(
+      "index",
+      "group_1",
+      "group_2",
+      "n_1",
+      "n_2",
+      "median_1",
+      "median_2",
+      "median_difference",
+      "statistic",
+      "p_value",
+      "p_value_adjusted",
+      "p_adjust_method",
+      "method"
+    )
+  )
 })
 
 test_that("microeda_alpha_report validates inputs", {
@@ -109,4 +176,20 @@ test_that("microeda_alpha_report validates inputs", {
   )
   expect_error(microeda_alpha_report(example$alpha, digits = NA_real_), "digits")
   expect_error(microeda_alpha_report(example$alpha, digits = 1.5), "digits")
+  expect_error(
+    microeda_alpha_report(example$alpha, indices = "unknown"),
+    "Unknown alpha report indices.*unknown"
+  )
+  expect_error(
+    microeda_alpha_report(example$alpha, indices = c("shannon", "shannon")),
+    "duplicate"
+  )
+  expect_error(
+    microeda_alpha_report(
+      example$alpha,
+      alpha_compare = example$alpha_cmp,
+      indices = "hill_q1"
+    ),
+    "alpha group tests.*hill_q1"
+  )
 })

@@ -374,6 +374,8 @@ as_alpha_pairwise <- function(x) {
 #' @param x A `microeda_alpha` object.
 #' @param alpha_compare Optional `microeda_alpha_compare` object from
 #'   [microeda_alpha_compare()].
+#' @param indices Optional character vector of alpha diversity indices to
+#'   include in the report. `NULL` includes all available report indices.
 #' @param digits Number of digits used when formatting numeric values.
 #'
 #' @return A single character string suitable for [cat()].
@@ -401,18 +403,26 @@ as_alpha_pairwise <- function(x) {
 #' alpha_cmp <- microeda_alpha_compare(alpha, indices = c("observed", "shannon"))
 #' cat(microeda_alpha_report(alpha, alpha_compare = alpha_cmp))
 #' @export
-microeda_alpha_report <- function(x, alpha_compare = NULL, digits = 3) {
+microeda_alpha_report <- function(x,
+                                  alpha_compare = NULL,
+                                  indices = NULL,
+                                  digits = 3) {
   if (!inherits(x, "microeda_alpha")) {
     stop("`x` must be a microeda_alpha object.", call. = FALSE)
   }
 
   digits <- validate_alpha_report_digits(digits)
+  summary <- alpha_filter_report_table(
+    as_alpha_summary(x),
+    indices = indices,
+    table_label = "alpha summary"
+  )
 
   lines <- c(
     "microeda alpha report",
     "---------------------",
     "",
-    alpha_summary_report_lines(as_alpha_summary(x), digits = digits)
+    alpha_summary_report_lines(summary, digits = digits)
   )
 
   if (!is.null(alpha_compare)) {
@@ -423,10 +433,16 @@ microeda_alpha_report <- function(x, alpha_compare = NULL, digits = 3) {
       )
     }
 
+    tests <- alpha_filter_report_table(
+      as_alpha_tests(alpha_compare),
+      indices = indices,
+      table_label = "alpha group tests"
+    )
+
     lines <- c(
       lines,
       "",
-      alpha_tests_report_lines(as_alpha_tests(alpha_compare), digits = digits)
+      alpha_tests_report_lines(tests, digits = digits)
     )
   }
 
@@ -491,6 +507,60 @@ validate_alpha_report_digits <- function(digits) {
   }
 
   as.integer(digits)
+}
+
+alpha_filter_report_table <- function(x, indices = NULL, table_label) {
+  if (is.null(indices)) {
+    return(x)
+  }
+
+  indices <- validate_alpha_report_indices(indices)
+  if (!"index" %in% names(x) || nrow(x) == 0) {
+    stop(
+      "No indices are available in the ",
+      table_label,
+      " table.",
+      call. = FALSE
+    )
+  }
+
+  available_indices <- unique(x$index)
+  missing_indices <- setdiff(indices, available_indices)
+  if (length(missing_indices) > 0) {
+    stop(
+      "Unknown alpha report indices in ",
+      table_label,
+      ": ",
+      paste(missing_indices, collapse = ", "),
+      ". Available indices: ",
+      paste(available_indices, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  out <- x[x$index %in% indices, , drop = FALSE]
+  out$index <- factor(out$index, levels = indices)
+  out <- out[order(out$index), , drop = FALSE]
+  out$index <- as.character(out$index)
+  row.names(out) <- NULL
+  out
+}
+
+validate_alpha_report_indices <- function(indices) {
+  if (!is.character(indices) || length(indices) < 1 ||
+      any(is.na(indices)) || any(!nzchar(indices))) {
+    stop(
+      "`indices` must be NULL or a character vector of alpha index names.",
+      call. = FALSE
+    )
+  }
+
+  if (anyDuplicated(indices)) {
+    stop("`indices` cannot contain duplicate values.", call. = FALSE)
+  }
+
+  indices
 }
 
 alpha_summary_report_lines <- function(summary, digits) {
@@ -934,7 +1004,7 @@ alpha_pairwise_report_statistic <- function(pairwise) {
 
 alpha_pairwise_p_significance <- function(p) {
   out <- rep("ns", length(p))
-  out[is.na(p)] <- NA_character_
+  out[is.na(p)] <- "NA"
   out[!is.na(p) & p <= 0.05] <- "*"
   out[!is.na(p) & p <= 0.01] <- "**"
   out[!is.na(p) & p <= 0.001] <- "***"
