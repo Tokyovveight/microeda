@@ -133,6 +133,9 @@ cat(microeda_beta_compare_report(beta_cmp))
 if (exists("beta_test")) {
   cat(microeda_beta_test_report(beta_test))
 }
+if (exists("beta_cmp_test")) {
+  cat(microeda_beta_compare_test_report(beta_cmp_test))
+}
 microeda_qc_write_report(qc, tempfile(fileext = ".txt"))
 ```
 
@@ -144,6 +147,8 @@ statistics and adjusted p-value labels. `microeda_beta_compare_report()`
 summarizes distance methods, method correlations, grouped distance summaries,
 and caveats. `microeda_beta_test_report()` reports exploratory PERMANOVA
 results together with dispersion diagnostics and caveats.
+`microeda_beta_compare_test_report()` shows the same paired diagnostics
+side-by-side across beta distance methods without ranking methods.
 
 ## Machine-Readable Extractors
 
@@ -178,6 +183,9 @@ as_beta_compare_distance_correlations(beta_cmp)
 if (exists("beta_test")) {
   as_beta_test_summary(beta_test)
 }
+if (exists("beta_cmp_test")) {
+  as_beta_compare_test_summary(beta_cmp_test)
+}
 ```
 
 ## Beta Group Testing
@@ -197,6 +205,23 @@ if (requireNamespace("vegan", quietly = TRUE)) {
 These tests are exploratory. PERMANOVA can be confounded by group dispersion
 differences, so the dispersion diagnostics and caveats should be inspected
 alongside the PERMANOVA table.
+
+For side-by-side exploratory diagnostics across beta distance methods, pass an
+existing grouped `microeda_beta_compare` object to
+`microeda_beta_compare_test()`. This reuses the stored distance objects and does
+not rank methods.
+
+```r
+if (requireNamespace("vegan", quietly = TRUE)) {
+  beta_cmp_test <- microeda_beta_compare_test(
+    beta_cmp,
+    permutations = 999,
+    seed = 1
+  )
+  as_beta_compare_test_summary(beta_cmp_test)
+  cat(microeda_beta_compare_test_report(beta_cmp_test))
+}
+```
 
 The alpha table includes classic indices (`observed`, `chao1`, `shannon`,
 `simpson`, `inverse_simpson`) and Hill/effective-diversity equivalents

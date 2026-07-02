@@ -199,6 +199,178 @@ microeda_beta_test_report <- function(x, digits = 3) {
   paste(lines, collapse = "\n")
 }
 
+#' Test beta diversity groups across compared distance methods
+#'
+#' `microeda_beta_compare_test()` runs [microeda_beta_test()] for each
+#' `microeda_beta` object stored in a grouped `microeda_beta_compare` object.
+#' The results are side-by-side exploratory diagnostics, not a formal ranking
+#' of distance methods.
+#'
+#' @param x A grouped `microeda_beta_compare` object.
+#' @param permutations Number of permutations passed to `vegan` for each
+#'   method.
+#' @param seed Optional random seed used while running each method's
+#'   permutation tests.
+#'
+#' @return A `microeda_beta_compare_test` object containing one
+#'   `microeda_beta_test` result per method, aggregated caveats, parameters,
+#'   and matched call.
+#' @examples
+#' counts <- matrix(
+#'   c(
+#'     10, 0, 0,
+#'     8, 1, 0,
+#'     0, 9, 1,
+#'     0, 7, 2
+#'   ),
+#'   nrow = 4,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- paste0("S", 1:4)
+#' colnames(counts) <- paste0("ASV", 1:3)
+#' metadata <- data.frame(group = c("A", "A", "B", "B"), row.names = rownames(counts))
+#'
+#' beta_cmp <- microeda_beta_compare(
+#'   counts,
+#'   metadata = metadata,
+#'   group = "group",
+#'   taxa_are_rows = FALSE,
+#'   methods = c("bray", "jaccard")
+#' )
+#' if (requireNamespace("vegan", quietly = TRUE)) {
+#'   beta_cmp_test <- microeda_beta_compare_test(beta_cmp, permutations = 99, seed = 1)
+#'   as_beta_compare_test_summary(beta_cmp_test)
+#'   cat(microeda_beta_compare_test_report(beta_cmp_test))
+#' }
+#' @export
+microeda_beta_compare_test <- function(x, permutations = 999, seed = NULL) {
+  if (!inherits(x, "microeda_beta_compare")) {
+    stop("`x` must be a microeda_beta_compare object.", call. = FALSE)
+  }
+
+  if (is.null(x$group)) {
+    stop("`x` must include group metadata.", call. = FALSE)
+  }
+
+  results <- lapply(x$methods, function(method) {
+    microeda_beta_test(
+      x$results[[method]],
+      permutations = permutations,
+      seed = seed
+    )
+  })
+  names(results) <- x$methods
+  first_result <- results[[1L]]
+
+  structure(
+    list(
+      results = results,
+      methods = x$methods,
+      group = first_result$group,
+      n_samples = first_result$n_samples,
+      n_groups = first_result$n_groups,
+      min_group_n = first_result$min_group_n,
+      caveats = beta_compare_test_caveats(results, x$methods),
+      params = list(
+        permutations = first_result$params$permutations,
+        seed = first_result$params$seed
+      ),
+      call = match.call()
+    ),
+    class = "microeda_beta_compare_test"
+  )
+}
+
+#' Summarize beta group tests across compared methods
+#'
+#' @param x A `microeda_beta_compare_test` object.
+#'
+#' @return A data frame with one row per distance method and compact PERMANOVA
+#'   and dispersion columns.
+#' @export
+as_beta_compare_test_summary <- function(x) {
+  if (!inherits(x, "microeda_beta_compare_test")) {
+    stop("`x` must be a microeda_beta_compare_test object.", call. = FALSE)
+  }
+
+  rows <- lapply(x$methods, function(method) {
+    as_beta_test_summary(x$results[[method]])
+  })
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
+}
+
+#' Build a compact report for beta group tests across compared methods
+#'
+#' `microeda_beta_compare_test_report()` formats side-by-side PERMANOVA and
+#' dispersion diagnostics from [microeda_beta_compare_test()] as plain text.
+#' The report intentionally avoids method ranking.
+#'
+#' @param x A `microeda_beta_compare_test` object.
+#' @param digits Number of decimal places to use for numeric report values.
+#'
+#' @return A single character string suitable for [cat()].
+#' @export
+microeda_beta_compare_test_report <- function(x, digits = 3) {
+  if (!inherits(x, "microeda_beta_compare_test")) {
+    stop("`x` must be a microeda_beta_compare_test object.", call. = FALSE)
+  }
+
+  digits <- validate_beta_report_digits(digits)
+  separator <- "========================================="
+  lines <- c(
+    separator,
+    "Beta comparison group tests",
+    separator,
+    "",
+    paste0("Methods: ", paste(x$methods, collapse = ", ")),
+    paste0("Group: ", x$group),
+    paste0("Samples: ", x$n_samples),
+    paste0("Groups: ", x$n_groups, " (min n = ", x$min_group_n, ")"),
+    paste0("Permutations: ", x$params$permutations),
+    "",
+    "These side-by-side diagnostics are not a formal method ranking."
+  )
+
+  for (method in x$methods) {
+    result <- x$results[[method]]
+    lines <- c(
+      lines,
+      "",
+      separator,
+      paste0("Method: ", method),
+      separator,
+      "",
+      "PERMANOVA",
+      beta_compare_report_table(result$permanova, digits = digits),
+      "",
+      "Dispersion diagnostics",
+      beta_compare_report_table(result$dispersion$test, digits = digits),
+      "",
+      "Mean distance to group centroid",
+      beta_compare_report_table(result$dispersion$groups, digits = digits)
+    )
+  }
+
+  caveat_lines <- paste0(
+    "- [",
+    x$caveats$method,
+    " ",
+    x$caveats$severity,
+    "] ",
+    x$caveats$message
+  )
+  lines <- c(
+    lines,
+    "",
+    "Aggregated caveats",
+    caveat_lines
+  )
+
+  paste(lines, collapse = "\n")
+}
+
 validate_beta_test_permutations <- function(permutations) {
   if (!is.numeric(permutations) || length(permutations) != 1 ||
       is.na(permutations) || !is.finite(permutations) ||
@@ -368,4 +540,21 @@ beta_test_caveat <- function(caveat_id, severity, message) {
     message = message,
     stringsAsFactors = FALSE
   )
+}
+
+beta_compare_test_caveats <- function(results, methods) {
+  rows <- lapply(methods, function(method) {
+    caveats <- results[[method]]$caveats
+    data.frame(
+      method = method,
+      caveat_id = caveats$caveat_id,
+      severity = caveats$severity,
+      message = caveats$message,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
 }
