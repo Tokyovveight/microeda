@@ -157,6 +157,45 @@ test_that("as_beta_test_summary returns stable compact columns", {
   expect_error(as_beta_test_summary(data.frame()), "microeda_beta_test")
 })
 
+test_that("print.microeda_beta_test gives compact report and helper hints", {
+  skip_if_not_installed("vegan")
+  beta <- beta_test_example()
+  beta_test <- microeda_beta_test(beta, permutations = 99, seed = 1)
+
+  visible <- NULL
+  output <- capture.output(visible <- withVisible(print(beta_test)))
+  output <- paste(output, collapse = "\n")
+
+  expect_false(visible$visible)
+  expect_identical(visible$value, beta_test)
+  expect_match(output, "<microeda_beta_test>", fixed = TRUE)
+  expect_match(output, "Method:", fixed = TRUE)
+  expect_match(output, "Group:", fixed = TRUE)
+  expect_match(output, "Samples:", fixed = TRUE)
+  expect_match(output, "Groups:", fixed = TRUE)
+  expect_match(output, "Permutations:", fixed = TRUE)
+  expect_match(output, "PERMANOVA:", fixed = TRUE)
+  expect_match(output, "Dispersion:", fixed = TRUE)
+  expect_match(output, "microeda_beta_test_report", fixed = TRUE)
+  expect_match(output, "as_beta_test_summary", fixed = TRUE)
+  expect_named(
+    as_beta_test_summary(beta_test),
+    c(
+      "method",
+      "group",
+      "n_samples",
+      "n_groups",
+      "min_group_n",
+      "permanova_r2",
+      "permanova_f",
+      "permanova_p",
+      "dispersion_f",
+      "dispersion_p",
+      "permutations"
+    )
+  )
+})
+
 test_that("microeda_beta_test_report includes paired diagnostics and caveats", {
   skip_if_not_installed("vegan")
   beta <- beta_test_example()

@@ -38,6 +38,7 @@
   labels.
 * Added optional `vegan`-backed beta group testing that pairs PERMANOVA with
   dispersion diagnostics.
+* Added a compact print method for beta group test objects.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.
