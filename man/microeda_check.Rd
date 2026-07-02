@@ -2,7 +2,7 @@
 % Please edit documentation in R/microeda.R
 \name{microeda_check}
 \alias{microeda_check}
-\title{Inspect microbiome count data and return evidence-guided EDA advice}
+\title{Inspect microbiome count data and return EDA diagnostics}
 \usage{
 microeda_check(
   x,
@@ -23,7 +23,7 @@ when group-level diagnostics are desired.}
 \item{taxonomy}{Optional taxonomy table with features as rows.}
 
 \item{group}{Optional metadata column used for group-size diagnostics and
-group-aware recommendations.}
+broad group-aware screening notes.}
 
 \item{taxa_are_rows}{For matrix/data frame inputs, whether rows are taxa.
 Ignored for \code{phyloseq} input because the orientation is read from the
@@ -36,7 +36,7 @@ low-prevalence features.}
 summaries.}
 }
 \value{
-A \code{microeda_report} object with diagnostics and recommendations.
+A \code{microeda_report} object with diagnostics and broad screening notes.
 }
 \description{
 \code{microeda_check()} accepts either a \code{phyloseq} object or a plain count

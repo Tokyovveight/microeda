@@ -21,7 +21,7 @@ The core idea is deliberately conservative:
   - uneven sequencing depth
   - low group sizes
   - missing metadata or taxonomy ranks
-- Return a recommendations table with `rule_id`, `topic`, `severity`,
+- Keep broad screening notes with `rule_id`, `topic`, `severity`,
   `recommendation`, `caveat`, and `evidence`.
 
 ## Example
@@ -55,7 +55,6 @@ report <- microeda_check(
 )
 
 report
-as_recommendations(report)
 ```
 
 ## QC summary
@@ -254,3 +253,7 @@ alpha_cmp <- microeda_alpha_compare(alpha)
 The package keeps the current evidence map in
 `inst/extdata/evidence_rules.yml`. The R functions use a built-in version of
 the same rules so the MVP does not require a YAML parser at runtime.
+
+`as_recommendations(report)` extracts the current broad screening notes. These
+notes are caveats for initial review, not contextual workflow recommendations,
+formal method ranking, or a substitute for the QC, alpha, and beta reports.

@@ -2,7 +2,7 @@
 % Please edit documentation in R/rules.R
 \name{microeda_rules}
 \alias{microeda_rules}
-\title{Return the built-in evidence rules}
+\title{Return the built-in broad screening rules}
 \usage{
 microeda_rules()
 }
@@ -10,7 +10,7 @@ microeda_rules()
 A data frame containing rule metadata.
 }
 \description{
-Return the built-in evidence rule table used by \code{\link[=microeda_check]{microeda_check()}}.
+Return the built-in broad screening rule table used by \code{\link[=microeda_check]{microeda_check()}}.
 }
 \details{
 The same rule map is mirrored as \code{inst/extdata/evidence_rules.yml} so it can

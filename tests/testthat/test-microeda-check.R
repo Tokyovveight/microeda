@@ -36,6 +36,95 @@ test_that("microeda_check summarizes matrix input", {
   expect_true("low_group_n" %in% report$recommendations$rule_id)
 })
 
+test_that("as_recommendations returns stored broad screening notes", {
+  counts <- matrix(
+    c(
+      10, 0, 0, 5,
+      20, 0, 1, 0,
+      0, 4, 0, 0,
+      2, 3, 0, 1
+    ),
+    nrow = 4,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(4))
+  colnames(counts) <- paste0("ASV", seq_len(4))
+
+  metadata <- data.frame(
+    group = c("A", "A", "B", "B"),
+    row.names = rownames(counts)
+  )
+
+  report <- microeda_check(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+
+  expect_identical(as_recommendations(report), report$recommendations)
+  expect_named(
+    report$recommendations,
+    c("rule_id", "topic", "severity", "recommendation", "caveat", "evidence")
+  )
+  expect_error(as_recommendations(data.frame()), "microeda_report")
+})
+
+test_that("microeda_rules returns stable rule metadata columns", {
+  rules <- microeda_rules()
+
+  expect_s3_class(rules, "data.frame")
+  expect_named(
+    rules,
+    c("rule_id", "topic", "severity", "recommendation", "caveat", "evidence")
+  )
+  expect_true(nrow(rules) > 0)
+})
+
+test_that("microeda_check print summarizes screening notes compactly", {
+  counts <- matrix(
+    c(
+      10, 0, 0, 5,
+      20, 0, 1, 0,
+      0, 4, 0, 0,
+      2, 3, 0, 1
+    ),
+    nrow = 4,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(4))
+  colnames(counts) <- paste0("ASV", seq_len(4))
+
+  metadata <- data.frame(
+    group = c("A", "A", "B", "B"),
+    row.names = rownames(counts)
+  )
+
+  report <- microeda_check(
+    counts,
+    metadata = metadata,
+    group = "group",
+    taxa_are_rows = FALSE
+  )
+  output <- capture.output(result <- withVisible(print(report)))
+
+  expect_false(result$visible)
+  expect_identical(result$value, report)
+  expect_true(any(grepl("Screening notes:", output, fixed = TRUE)))
+  expect_true(any(grepl("By severity:", output, fixed = TRUE)))
+  expect_true(any(grepl("Topics:", output, fixed = TRUE)))
+  expect_true(any(grepl(
+    "Use as_recommendations(x) to inspect broad screening notes.",
+    output,
+    fixed = TRUE
+  )))
+  expect_false(any(grepl(
+    "Treat abundance differences as compositional signals",
+    output,
+    fixed = TRUE
+  )))
+})
+
 test_that("relative input is detected", {
   counts <- matrix(
     c(

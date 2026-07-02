@@ -2,7 +2,7 @@
 % Please edit documentation in R/microeda.R
 \name{as_recommendations}
 \alias{as_recommendations}
-\title{Extract recommendations from a microeda report}
+\title{Extract broad screening notes from a microeda report}
 \usage{
 as_recommendations(x)
 }
@@ -13,5 +13,7 @@ as_recommendations(x)
 A data frame of recommendations.
 }
 \description{
-Extract the recommendations table from the result of \code{\link[=microeda_check]{microeda_check()}}.
+Extract the broad screening notes table from the result of
+\code{\link[=microeda_check]{microeda_check()}}. These notes are general caveats, not contextual method
+rankings or final workflow recommendations.
 }

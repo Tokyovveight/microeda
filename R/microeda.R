@@ -1,4 +1,4 @@
-#' Inspect microbiome count data and return evidence-guided EDA advice
+#' Inspect microbiome count data and return EDA diagnostics
 #'
 #' `microeda_check()` accepts either a `phyloseq` object or a plain count
 #' matrix/data frame. Internally, counts are oriented as samples by features.
@@ -8,7 +8,7 @@
 #'   when group-level diagnostics are desired.
 #' @param taxonomy Optional taxonomy table with features as rows.
 #' @param group Optional metadata column used for group-size diagnostics and
-#'   group-aware recommendations.
+#'   broad group-aware screening notes.
 #' @param taxa_are_rows For matrix/data frame inputs, whether rows are taxa.
 #'   Ignored for `phyloseq` input because the orientation is read from the
 #'   object.
@@ -17,7 +17,7 @@
 #' @param feature_read_n Number of features used for the first-N and top-N read
 #'   summaries.
 #'
-#' @return A `microeda_report` object with diagnostics and recommendations.
+#' @return A `microeda_report` object with diagnostics and broad screening notes.
 #' @examples
 #' counts <- matrix(c(10, 0, 0, 5, 20, 0, 1, 0), nrow = 2, byrow = TRUE)
 #' rownames(counts) <- c("S1", "S2")
@@ -54,9 +54,11 @@ microeda_check <- function(x,
   )
 }
 
-#' Extract recommendations from a microeda report
+#' Extract broad screening notes from a microeda report
 #'
-#' Extract the recommendations table from the result of [microeda_check()].
+#' Extract the broad screening notes table from the result of
+#' [microeda_check()]. These notes are general caveats, not contextual method
+#' rankings or final workflow recommendations.
 #'
 #' @param x A `microeda_report` object.
 #'

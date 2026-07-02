@@ -22,7 +22,7 @@ when group-level diagnostics are desired.}
 \item{taxonomy}{Optional taxonomy table with features as rows.}
 
 \item{group}{Optional metadata column used for group-size diagnostics and
-group-aware recommendations.}
+broad group-aware screening notes.}
 
 \item{taxa_are_rows}{For matrix/data frame inputs, whether rows are taxa.
 Ignored for \code{phyloseq} input because the orientation is read from the

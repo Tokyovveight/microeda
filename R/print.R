@@ -95,20 +95,24 @@ print.microeda_report <- function(x, ...) {
     )
   }
 
-  cat("\nRecommendations: ", nrow(x$recommendations), "\n", sep = "")
-  for (i in seq_len(nrow(x$recommendations))) {
-    row <- x$recommendations[i, , drop = FALSE]
+  recommendations <- x$recommendations
+  cat("\nScreening notes: ", nrow(recommendations), "\n", sep = "")
+  if (nrow(recommendations) > 0) {
+    severity_counts <- table(recommendations$severity)
     cat(
-      "- [",
-      row$severity,
-      "] ",
-      row$topic,
-      ": ",
-      row$recommendation,
+      "By severity: ",
+      paste0(names(severity_counts), "=", as.integer(severity_counts), collapse = "; "),
+      "\n",
+      sep = ""
+    )
+    cat(
+      "Topics:      ",
+      paste(sort(unique(recommendations$topic)), collapse = ", "),
       "\n",
       sep = ""
     )
   }
+  cat("Use as_recommendations(x) to inspect broad screening notes.\n")
 
   invisible(x)
 }
