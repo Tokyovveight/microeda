@@ -294,6 +294,60 @@ print.microeda_beta_test <- function(x, ...) {
 }
 
 #' @export
+print.microeda_beta_compare_test <- function(x, ...) {
+  summary <- as_beta_compare_test_summary(x)
+  summary <- summary[
+    ,
+    c(
+      "method",
+      "permanova_r2",
+      "permanova_f",
+      "permanova_p",
+      "dispersion_f",
+      "dispersion_p"
+    ),
+    drop = FALSE
+  ]
+
+  cat("<microeda_beta_compare_test>\n")
+  cat("Methods:      ", paste(x$methods, collapse = ", "), "\n", sep = "")
+  cat("Group:        ", x$group, "\n", sep = "")
+  cat("Samples:      ", x$n_samples, "\n", sep = "")
+  cat("Groups:       ", x$n_groups, " (min n = ", x$min_group_n, ")\n", sep = "")
+  cat("Permutations: ", x$params$permutations, "\n", sep = "")
+
+  cat("\nPERMANOVA / Dispersion summary:\n")
+  cat(paste(beta_compare_report_table(summary, digits = 3), collapse = "\n"))
+  cat("\n")
+
+  caveats <- x$caveats
+  cat("Caveats:      ", nrow(caveats), sep = "")
+  if (nrow(caveats) > 0 && "severity" %in% names(caveats)) {
+    severity_counts <- table(caveats$severity)
+    cat(
+      " (",
+      paste0(
+        names(severity_counts),
+        "=",
+        as.integer(severity_counts),
+        collapse = "; "
+      ),
+      ")",
+      sep = ""
+    )
+  }
+  cat("\n")
+
+  cat(
+    "\nUse microeda_beta_compare_test_report(x) ",
+    "for the full side-by-side PERMANOVA/dispersion report.\n",
+    sep = ""
+  )
+  cat("Use as_beta_compare_test_summary(x) for machine-readable summary values.\n")
+  invisible(x)
+}
+
+#' @export
 print.microeda_beta_compare_ordination <- function(x, ...) {
   cat("<microeda_beta_compare_ordination>\n")
   cat("Methods:            ", paste(x$methods, collapse = ", "), "\n", sep = "")

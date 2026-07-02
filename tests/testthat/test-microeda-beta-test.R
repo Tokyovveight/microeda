@@ -384,6 +384,51 @@ test_that("microeda_beta_compare_test_report formats method blocks and caveats",
   )
 })
 
+test_that("print.microeda_beta_compare_test gives compact summary and helper hints", {
+  skip_if_not_installed("vegan")
+  beta_cmp <- beta_compare_test_example()
+  beta_cmp_test <- microeda_beta_compare_test(
+    beta_cmp,
+    permutations = 99,
+    seed = 1
+  )
+
+  visible <- NULL
+  output <- capture.output(visible <- withVisible(print(beta_cmp_test)))
+  output <- paste(output, collapse = "\n")
+
+  expect_false(visible$visible)
+  expect_identical(visible$value, beta_cmp_test)
+  expect_match(output, "<microeda_beta_compare_test>", fixed = TRUE)
+  expect_match(output, "Methods:", fixed = TRUE)
+  expect_match(output, "Group:", fixed = TRUE)
+  expect_match(output, "Samples:", fixed = TRUE)
+  expect_match(output, "Groups:", fixed = TRUE)
+  expect_match(output, "Permutations:", fixed = TRUE)
+  expect_match(output, "bray", fixed = TRUE)
+  expect_match(output, "jaccard", fixed = TRUE)
+  expect_match(output, "PERMANOVA", fixed = TRUE)
+  expect_match(output, "Dispersion", fixed = TRUE)
+  expect_match(output, "microeda_beta_compare_test_report", fixed = TRUE)
+  expect_match(output, "as_beta_compare_test_summary", fixed = TRUE)
+  expect_named(
+    as_beta_compare_test_summary(beta_cmp_test),
+    c(
+      "method",
+      "group",
+      "n_samples",
+      "n_groups",
+      "min_group_n",
+      "permanova_r2",
+      "permanova_f",
+      "permanova_p",
+      "dispersion_f",
+      "dispersion_p",
+      "permutations"
+    )
+  )
+})
+
 test_that("compare testing keeps single-method beta test behavior unchanged", {
   skip_if_not_installed("vegan")
   beta <- beta_test_example()
