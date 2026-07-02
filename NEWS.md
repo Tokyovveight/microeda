@@ -36,6 +36,8 @@
 * Improved QC and alpha print hints for human-readable report helpers.
 * Added alpha report index filtering and cleaner missing pairwise significance
   labels.
+* Added optional `vegan`-backed beta group testing that pairs PERMANOVA with
+  dispersion diagnostics.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.

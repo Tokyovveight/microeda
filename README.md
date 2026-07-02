@@ -19,8 +19,10 @@ The core idea is deliberately conservative:
 - Keep broad screening notes with `rule_id`, `topic`, `severity`,
   `recommendation`, `caveat`, and `evidence`.
 
-Compositional/log-ratio methods, PERMANOVA, dispersion tests, differential
-abundance methods, and formal method ranking are not implemented yet.
+PERMANOVA-style beta group testing is available when the optional `vegan`
+package is installed and is reported together with dispersion diagnostics.
+Compositional/log-ratio methods, differential abundance methods, and formal
+method ranking are not implemented yet.
 
 ## First Workflow
 
@@ -97,6 +99,18 @@ beta_cmp <- microeda_beta_compare(
   taxa_are_rows = FALSE
 )
 cat(microeda_beta_compare_report(beta_cmp))
+
+beta_bray <- microeda_beta(
+  counts,
+  metadata = metadata,
+  group = "group",
+  taxa_are_rows = FALSE,
+  method = "bray"
+)
+if (requireNamespace("vegan", quietly = TRUE)) {
+  beta_test <- microeda_beta_test(beta_bray, permutations = 99, seed = 1)
+  cat(microeda_beta_test_report(beta_test))
+}
 ```
 
 For `phyloseq`, pass the object directly:
@@ -116,6 +130,9 @@ cat(microeda_qc_report(qc))
 cat(microeda_alpha_report(alpha, alpha_compare = alpha_cmp))
 cat(microeda_alpha_pairwise_report(alpha_cmp))
 cat(microeda_beta_compare_report(beta_cmp))
+if (exists("beta_test")) {
+  cat(microeda_beta_test_report(beta_test))
+}
 microeda_qc_write_report(qc, tempfile(fileext = ".txt"))
 ```
 
@@ -125,7 +142,8 @@ summaries and omnibus group tests by diversity index.
 `microeda_alpha_pairwise_report()` formats pairwise Wilcoxon comparisons with
 statistics and adjusted p-value labels. `microeda_beta_compare_report()`
 summarizes distance methods, method correlations, grouped distance summaries,
-and caveats.
+and caveats. `microeda_beta_test_report()` reports exploratory PERMANOVA
+results together with dispersion diagnostics and caveats.
 
 ## Machine-Readable Extractors
 
@@ -156,7 +174,29 @@ as_beta_compare_summary(beta_cmp)
 as_beta_compare_distances(beta_cmp)
 as_beta_compare_group_summary(beta_cmp)
 as_beta_compare_distance_correlations(beta_cmp)
+
+if (exists("beta_test")) {
+  as_beta_test_summary(beta_test)
+}
 ```
+
+## Beta Group Testing
+
+`microeda_beta_test()` accepts a grouped `microeda_beta` object and uses the
+stored distance object for paired PERMANOVA and betadisper-style dispersion
+diagnostics. This workflow requires the optional `vegan` package.
+
+```r
+if (requireNamespace("vegan", quietly = TRUE)) {
+  beta_test <- microeda_beta_test(beta_bray, permutations = 999, seed = 1)
+  as_beta_test_summary(beta_test)
+  cat(microeda_beta_test_report(beta_test))
+}
+```
+
+These tests are exploratory. PERMANOVA can be confounded by group dispersion
+differences, so the dispersion diagnostics and caveats should be inspected
+alongside the PERMANOVA table.
 
 The alpha table includes classic indices (`observed`, `chao1`, `shannon`,
 `simpson`, `inverse_simpson`) and Hill/effective-diversity equivalents
