@@ -834,6 +834,84 @@ test_that("da_build_result_object creates internal DA result skeleton", {
   )
 })
 
+test_that("da_build_result_object accepts named backend result lists", {
+  counts <- da_example_counts()
+  metadata <- da_example_metadata(rownames(counts))
+  context <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE
+  )
+  backend <- da_fake_backend_result("aldex2")
+
+  named_result <- microeda:::da_build_result_object(
+    context,
+    list(aldex2 = backend)
+  )
+  unnamed_result <- microeda:::da_build_result_object(
+    context,
+    list(backend)
+  )
+
+  expect_s3_class(named_result, "microeda_da")
+  expect_s3_class(unnamed_result, "microeda_da")
+  expect_equal(named_result$methods, "aldex2")
+  expect_equal(unnamed_result$methods, "aldex2")
+  expect_named(named_result$raw_outputs, "aldex2")
+  expect_named(named_result$method_results, "aldex2")
+  expect_named(unnamed_result$raw_outputs, "aldex2")
+  expect_named(unnamed_result$method_results, "aldex2")
+})
+
+test_that("da_build_result_object still rejects method mismatches", {
+  counts <- da_example_counts()
+  metadata <- da_example_metadata(rownames(counts))
+  context_one <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE
+  )
+  context_two <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = c("aldex2", "deseq2"),
+    taxa_are_rows = FALSE
+  )
+
+  expect_error(
+    microeda:::da_build_result_object(
+      context_one,
+      list(aldex2 = da_fake_backend_result("deseq2"))
+    ),
+    "methods must match"
+  )
+  expect_error(
+    microeda:::da_build_result_object(
+      context_two,
+      list(
+        deseq2 = da_fake_backend_result("deseq2"),
+        aldex2 = da_fake_backend_result("aldex2")
+      )
+    ),
+    "methods must match"
+  )
+  expect_error(
+    microeda:::da_build_result_object(
+      context_two,
+      list(aldex2 = da_fake_backend_result("aldex2"))
+    ),
+    "methods must match"
+  )
+})
+
 test_that("DA skeleton adds no public exports or backend dependencies", {
   exports <- getNamespaceExports("microeda")
   expect_false("microeda_da" %in% exports)

@@ -501,7 +501,11 @@ da_combine_method_results <- function(backend_results) {
     da_validate_backend_result(result)
     result
   })
-  methods <- vapply(backend_results, function(result) result$method, character(1))
+  methods <- unname(vapply(
+    backend_results,
+    function(result) result$method,
+    character(1)
+  ))
   if (anyDuplicated(methods)) {
     stop("`backend_results` cannot contain duplicate methods.", call. = FALSE)
   }
