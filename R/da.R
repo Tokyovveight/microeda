@@ -293,14 +293,6 @@ da_run_aldex2 <- function(context,
     stop("`context$methods` must include \"aldex2\".", call. = FALSE)
   }
 
-  if (nrow(context$contrast_plan) != 1 ||
-      !identical(context$contrast_plan$contrast_type, "explicit")) {
-    stop(
-      "ALDEx2 pairwise contrast execution is not implemented yet.",
-      call. = FALSE
-    )
-  }
-
   if (!da_optional_package_available("ALDEx2")) {
     stop(
       "`da_run_aldex2()` requires the optional package `ALDEx2`.",
@@ -314,9 +306,54 @@ da_run_aldex2 <- function(context,
     paired.test = paired.test
   )
 
-  da_run_aldex2_contrast(
-    context = context,
-    contrast_row = context$contrast_plan[1, , drop = FALSE],
+  if (nrow(context$contrast_plan) == 1 &&
+      identical(context$contrast_plan$contrast_type, "explicit")) {
+    return(da_run_aldex2_contrast(
+      context = context,
+      contrast_row = context$contrast_plan[1, , drop = FALSE],
+      params = params
+    ))
+  }
+
+  if (!all(context$contrast_plan$contrast_type == "pairwise")) {
+    stop(
+      "ALDEx2 supports explicit or pairwise contrast plans only.",
+      call. = FALSE
+    )
+  }
+
+  contrast_results <- lapply(seq_len(nrow(context$contrast_plan)), function(i) {
+    da_run_aldex2_contrast(
+      context = context,
+      contrast_row = context$contrast_plan[i, , drop = FALSE],
+      params = params
+    )
+  })
+  contrast_labels <- context$contrast_plan$contrast
+  names(contrast_results) <- contrast_labels
+
+  results <- do.call(
+    rbind,
+    lapply(contrast_results, function(result) result$results)
+  )
+  row.names(results) <- NULL
+
+  raw_contrasts <- lapply(contrast_results, function(result) result$raw_output)
+  names(raw_contrasts) <- contrast_labels
+
+  raw_output <- list(
+    contrasts = raw_contrasts,
+    contrast_plan = context$contrast_plan,
+    params = params,
+    input_orientation = "feature_by_sample",
+    transposed_from_context = TRUE
+  )
+
+  da_backend_result(
+    method = "aldex2",
+    results = results,
+    raw_output = raw_output,
+    notes = da_method_notes("aldex2"),
     params = params
   )
 }

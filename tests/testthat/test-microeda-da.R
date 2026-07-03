@@ -100,6 +100,34 @@ da_aldex2_example_metadata <- function(sample_ids = paste0("S", seq_len(6))) {
   )
 }
 
+da_aldex2_pairwise_counts <- function() {
+  counts <- matrix(
+    c(
+      40, 8, 20, 2,
+      38, 9, 22, 3,
+      42, 7, 19, 2,
+      12, 35, 18, 4,
+      10, 37, 17, 5,
+      11, 33, 20, 4,
+      8, 15, 40, 12,
+      7, 14, 38, 13,
+      9, 16, 42, 11
+    ),
+    nrow = 9,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(9))
+  colnames(counts) <- paste0("ASV", seq_len(4))
+  counts
+}
+
+da_aldex2_pairwise_metadata <- function(sample_ids = paste0("S", seq_len(9))) {
+  data.frame(
+    group = c("A", "A", "A", "B", "B", "B", "C", "C", "C"),
+    row.names = sample_ids
+  )
+}
+
 test_that("da_prepare_context accepts matrix and data frame inputs", {
   counts <- da_example_counts()
   metadata <- da_example_metadata(rownames(counts))
@@ -621,38 +649,130 @@ test_that("da_run_aldex2 reports missing optional ALDEx2 clearly", {
   )
 })
 
-test_that("da_run_aldex2 errors clearly for pairwise contrast plans", {
-  counts <- matrix(
-    c(
-      10, 0, 1,
-      8, 2, 0,
-      0, 7, 2,
-      1, 6, 3,
-      2, 1, 8,
-      1, 2, 7
-    ),
-    nrow = 6,
-    byrow = TRUE
-  )
-  rownames(counts) <- paste0("S", seq_len(6))
-  colnames(counts) <- paste0("ASV", seq_len(3))
-  metadata <- data.frame(
-    group = c("A", "A", "B", "B", "C", "C"),
-    row.names = rownames(counts)
+test_that("da_run_aldex2 executes pairwise contrast plans", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_pairwise_counts()
+  metadata <- da_aldex2_pairwise_metadata(rownames(counts))
+  taxonomy <- data.frame(
+    Genus = paste0("Genus", seq_len(ncol(counts))),
+    row.names = colnames(counts)
   )
   context <- microeda:::da_prepare_context(
     counts,
     metadata = metadata,
+    taxonomy = taxonomy,
     group = "group",
     contrast = "pairwise",
     methods = "aldex2",
+    tax_rank = "Genus",
     taxa_are_rows = FALSE
+  )
+  backend <- microeda:::da_run_aldex2(context, mc.samples = 16)
+
+  expected_contrasts <- c("A_vs_B", "A_vs_C", "B_vs_C")
+  expect_s3_class(backend, "microeda_da_backend_result")
+  expect_equal(backend$method, "aldex2")
+  expect_named(backend$results, da_expected_result_columns())
+  expect_equal(nrow(backend$results), ncol(counts) * length(expected_contrasts))
+  expect_equal(unique(backend$results$contrast), expected_contrasts)
+  expect_equal(
+    unique(backend$results[backend$results$contrast == "A_vs_B", "group1"]),
+    "A"
+  )
+  expect_equal(
+    unique(backend$results[backend$results$contrast == "A_vs_B", "group2"]),
+    "B"
+  )
+  expect_equal(
+    unique(backend$results[backend$results$contrast == "A_vs_C", "group1"]),
+    "A"
+  )
+  expect_equal(
+    unique(backend$results[backend$results$contrast == "A_vs_C", "group2"]),
+    "C"
+  )
+  expect_equal(
+    unique(backend$results[backend$results$contrast == "B_vs_C", "group1"]),
+    "B"
+  )
+  expect_equal(
+    unique(backend$results[backend$results$contrast == "B_vs_C", "group2"]),
+    "C"
+  )
+  expect_equal(backend$results$feature_id, rep(colnames(counts), length(expected_contrasts)))
+  expect_equal(backend$results$taxon_label, rep(taxonomy$Genus, length(expected_contrasts)))
+  expect_named(
+    backend$raw_output,
+    c(
+      "contrasts",
+      "contrast_plan",
+      "params",
+      "input_orientation",
+      "transposed_from_context"
+    )
+  )
+  expect_named(backend$raw_output$contrasts, expected_contrasts)
+  expect_equal(backend$raw_output$contrast_plan, context$contrast_plan)
+  expect_equal(backend$raw_output$params$mc.samples, 16L)
+  expect_equal(backend$raw_output$input_orientation, "feature_by_sample")
+  expect_true(backend$raw_output$transposed_from_context)
+  for (contrast in expected_contrasts) {
+    raw_contrast <- backend$raw_output$contrasts[[contrast]]
+    expect_named(
+      raw_contrast,
+      c(
+        "clr",
+        "ttest",
+        "effect",
+        "combined",
+        "conditions",
+        "contrast_row",
+        "input_orientation",
+        "transposed_from_context",
+        "params",
+        "warnings",
+        "messages"
+      )
+    )
+    expect_true(methods::is(raw_contrast$clr, "aldex.clr"))
+    expect_s3_class(raw_contrast$ttest, "data.frame")
+    expect_s3_class(raw_contrast$effect, "data.frame")
+    expect_s3_class(raw_contrast$combined, "data.frame")
+    expect_equal(raw_contrast$contrast_row$contrast, contrast)
+    expect_equal(raw_contrast$params, backend$params)
+  }
+
+  da_result <- microeda:::da_build_result_object(context, list(aldex2 = backend))
+  expect_s3_class(da_result, "microeda_da")
+  expect_equal(nrow(da_result$results), nrow(backend$results))
+  expect_named(da_result$raw_outputs, "aldex2")
+  expect_named(da_result$method_results, "aldex2")
+  expect_false(any(duplicated(
+    da_result$caveats[c("method", "caveat_id", "topic", "severity", "message")]
+  )))
+})
+
+test_that("da_run_aldex2 validates unsupported contrast plan types", {
+  counts <- da_example_counts()
+  metadata <- da_example_metadata(rownames(counts))
+  context <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE
+  )
+  context$contrast_plan$contrast_type <- "unsupported"
+  testthat::local_mocked_bindings(
+    da_optional_package_available = function(package) TRUE,
+    .package = "microeda"
   )
 
   expect_error(
-    microeda:::da_run_aldex2(context),
-    "ALDEx2 pairwise contrast execution is not implemented yet.",
-    fixed = TRUE
+    microeda:::da_run_aldex2(context, mc.samples = 16),
+    "explicit or pairwise"
   )
 })
 
