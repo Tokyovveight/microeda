@@ -281,6 +281,162 @@ da_standard_result <- function(...) {
   data.frame(columns, stringsAsFactors = FALSE, check.names = FALSE)
 }
 
+da_run_aldex2 <- function(context,
+                          mc.samples = 128,
+                          denom = "all",
+                          paired.test = FALSE) {
+  if (!inherits(context, "microeda_da_context")) {
+    stop("`context` must be a microeda_da_context object.", call. = FALSE)
+  }
+
+  if (!"aldex2" %in% context$methods) {
+    stop("`context$methods` must include \"aldex2\".", call. = FALSE)
+  }
+
+  if (nrow(context$contrast_plan) != 1 ||
+      !identical(context$contrast_plan$contrast_type, "explicit")) {
+    stop(
+      "ALDEx2 pairwise contrast execution is not implemented yet.",
+      call. = FALSE
+    )
+  }
+
+  if (!da_optional_package_available("ALDEx2")) {
+    stop(
+      "`da_run_aldex2()` requires the optional package `ALDEx2`.",
+      call. = FALSE
+    )
+  }
+
+  params <- da_validate_aldex2_params(
+    mc.samples = mc.samples,
+    denom = denom,
+    paired.test = paired.test
+  )
+
+  da_run_aldex2_contrast(
+    context = context,
+    contrast_row = context$contrast_plan[1, , drop = FALSE],
+    params = params
+  )
+}
+
+da_run_aldex2_contrast <- function(context, contrast_row, params) {
+  group_values <- as.character(context$group_values)
+  sample_ids <- names(context$group_values)
+  group1 <- contrast_row$group1
+  group2 <- contrast_row$group2
+  keep <- group_values %in% c(group1, group2)
+  selected_samples <- sample_ids[keep]
+  conditions <- group_values[keep]
+
+  if (!all(c(group1, group2) %in% conditions)) {
+    stop("Both contrast groups must have samples for ALDEx2.", call. = FALSE)
+  }
+
+  conditions <- factor(conditions, levels = c(group1, group2))
+  reads <- t(context$counts[selected_samples, , drop = FALSE])
+  warnings <- character()
+  messages <- character()
+  clr <- NULL
+  ttest <- NULL
+  effect <- NULL
+
+  stdout <- utils::capture.output({
+    withCallingHandlers(
+      {
+        clr <- ALDEx2::aldex.clr(
+          reads,
+          as.character(conditions),
+          mc.samples = params$mc.samples,
+          denom = params$denom,
+          verbose = FALSE
+        )
+        ttest <- ALDEx2::aldex.ttest(
+          clr,
+          paired.test = params$paired.test,
+          verbose = FALSE
+        )
+        effect <- ALDEx2::aldex.effect(
+          clr,
+          verbose = FALSE,
+          paired.test = params$paired.test
+        )
+      },
+      warning = function(w) {
+        warnings <<- c(warnings, conditionMessage(w))
+        invokeRestart("muffleWarning")
+      },
+      message = function(m) {
+        messages <<- c(messages, conditionMessage(m))
+        invokeRestart("muffleMessage")
+      }
+    )
+  })
+  messages <- c(messages, stdout[nzchar(stdout)])
+
+  ttest <- as.data.frame(ttest, stringsAsFactors = FALSE, check.names = FALSE)
+  effect <- as.data.frame(effect, stringsAsFactors = FALSE, check.names = FALSE)
+  combined <- da_combine_aldex2_tables(ttest = ttest, effect = effect)
+  results <- da_standardize_aldex2_result(
+    combined = combined,
+    context = context,
+    contrast_row = contrast_row
+  )
+
+  raw_output <- list(
+    clr = clr,
+    ttest = ttest,
+    effect = effect,
+    combined = combined,
+    conditions = as.character(conditions),
+    contrast_row = contrast_row,
+    input_orientation = "feature_by_sample",
+    transposed_from_context = TRUE,
+    params = params,
+    warnings = warnings,
+    messages = messages
+  )
+
+  da_backend_result(
+    method = "aldex2",
+    results = results,
+    raw_output = raw_output,
+    notes = da_method_notes("aldex2"),
+    params = params
+  )
+}
+
+da_standardize_aldex2_result <- function(combined, context, contrast_row) {
+  feature_ids <- rownames(combined)
+  p_adjusted <- da_column_or_na(combined, "we.eBH")
+  method_note <- da_method_note("aldex2")$message
+
+  da_standard_result(
+    feature_id = feature_ids,
+    taxon_label = da_taxon_labels(context, feature_ids),
+    rank = da_result_rank(context),
+    method = "aldex2",
+    contrast = contrast_row$contrast,
+    group1 = contrast_row$group1,
+    group2 = contrast_row$group2,
+    effect = da_column_or_na(combined, "effect"),
+    effect_type = "aldex2_effect",
+    log_fold_change = NA_real_,
+    statistic = NA_real_,
+    standard_error = NA_real_,
+    ci_low = NA_real_,
+    ci_high = NA_real_,
+    p_value = da_column_or_na(combined, "we.ep"),
+    p_adjusted = p_adjusted,
+    p_adjust_method = "aldex2_native_BH",
+    p_adjust_scope = "method_contrast",
+    significance = da_p_significance(p_adjusted),
+    direction = NA_character_,
+    method_note = method_note
+  )
+}
+
 da_backend_result <- function(method,
                               results = da_empty_result(),
                               raw_output = NULL,
@@ -563,6 +719,34 @@ da_validate_p_adjust_method <- function(p_adjust_method) {
   p_adjust_method
 }
 
+da_validate_aldex2_params <- function(mc.samples, denom, paired.test) {
+  if (!is.numeric(mc.samples) || length(mc.samples) != 1 ||
+      is.na(mc.samples) || !is.finite(mc.samples) ||
+      mc.samples < 1 || mc.samples != floor(mc.samples)) {
+    stop("`mc.samples` must be a positive whole number.", call. = FALSE)
+  }
+
+  if (!is.character(denom) || length(denom) != 1 ||
+      is.na(denom) || !nzchar(denom)) {
+    stop("`denom` must be a single non-empty character string.", call. = FALSE)
+  }
+
+  if (!is.logical(paired.test) || length(paired.test) != 1 ||
+      is.na(paired.test)) {
+    stop("`paired.test` must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  list(
+    mc.samples = as.integer(mc.samples),
+    denom = denom,
+    paired.test = paired.test
+  )
+}
+
+da_optional_package_available <- function(package) {
+  requireNamespace(package, quietly = TRUE)
+}
+
 da_context_caveats <- function(counts, group_values, methods, tax_rank, taxonomy) {
   rows <- list(da_caveat(
     method = NA_character_,
@@ -732,6 +916,61 @@ da_feature_metadata <- function(context) {
   }
 
   row.names(out) <- NULL
+  out
+}
+
+da_combine_aldex2_tables <- function(ttest, effect) {
+  if (is.null(rownames(ttest)) || is.null(rownames(effect)) ||
+      any(!nzchar(rownames(ttest))) || any(!nzchar(rownames(effect)))) {
+    stop("ALDEx2 output must include feature row names.", call. = FALSE)
+  }
+
+  missing_effect <- setdiff(rownames(ttest), rownames(effect))
+  if (length(missing_effect) > 0) {
+    stop("ALDEx2 t-test and effect outputs have different features.", call. = FALSE)
+  }
+
+  effect <- effect[rownames(ttest), , drop = FALSE]
+  out <- data.frame(ttest, effect, check.names = FALSE)
+  row.names(out) <- rownames(ttest)
+  out
+}
+
+da_column_or_na <- function(data, column) {
+  if (column %in% names(data)) {
+    return(as.numeric(data[[column]]))
+  }
+
+  rep(NA_real_, nrow(data))
+}
+
+da_taxon_labels <- function(context, feature_ids) {
+  if (is.null(context$tax_rank) || is.null(context$taxonomy)) {
+    return(rep(NA_character_, length(feature_ids)))
+  }
+
+  taxonomy <- as.data.frame(context$taxonomy, stringsAsFactors = FALSE)
+  taxon_values <- rep(NA_character_, length(feature_ids))
+  matched <- match(feature_ids, rownames(taxonomy))
+  found <- !is.na(matched)
+  taxon_values[found] <- as.character(taxonomy[matched[found], context$tax_rank])
+  taxon_values
+}
+
+da_result_rank <- function(context) {
+  if (is.null(context$tax_rank)) {
+    return(NA_character_)
+  }
+
+  context$tax_rank
+}
+
+da_p_significance <- function(p) {
+  out <- rep("ns", length(p))
+  out[is.na(p)] <- NA_character_
+  out[!is.na(p) & p <= 0.05] <- "*"
+  out[!is.na(p) & p <= 0.01] <- "**"
+  out[!is.na(p) & p <= 0.001] <- "***"
   out
 }
 

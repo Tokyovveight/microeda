@@ -19,6 +19,7 @@ Depends:
 Imports:
     methods
 Suggests:
+    ALDEx2,
     phyloseq,
     testthat (>= 3.0.0),
     vegan

@@ -75,6 +75,31 @@ da_fake_backend_result <- function(method,
   )
 }
 
+da_aldex2_example_counts <- function() {
+  counts <- matrix(
+    c(
+      40, 8, 20, 2,
+      38, 9, 22, 3,
+      42, 7, 19, 2,
+      12, 35, 18, 4,
+      10, 37, 17, 5,
+      11, 33, 20, 4
+    ),
+    nrow = 6,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(6))
+  colnames(counts) <- paste0("ASV", seq_len(4))
+  counts
+}
+
+da_aldex2_example_metadata <- function(sample_ids = paste0("S", seq_len(6))) {
+  data.frame(
+    group = c("A", "A", "A", "B", "B", "B"),
+    row.names = sample_ids
+  )
+}
+
 test_that("da_prepare_context accepts matrix and data frame inputs", {
   counts <- da_example_counts()
   metadata <- da_example_metadata(rownames(counts))
@@ -550,6 +575,195 @@ test_that("da_deduplicate_caveats collapses exact duplicates stably", {
   expect_true(is.na(deduplicated$method[3]))
 })
 
+test_that("da_run_aldex2 validates context and method before execution", {
+  counts <- da_example_counts()
+  metadata <- da_example_metadata(rownames(counts))
+  context <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "deseq2",
+    taxa_are_rows = FALSE
+  )
+
+  expect_error(
+    microeda:::da_run_aldex2(list()),
+    "microeda_da_context"
+  )
+  expect_error(
+    microeda:::da_run_aldex2(context),
+    "aldex2"
+  )
+})
+
+test_that("da_run_aldex2 reports missing optional ALDEx2 clearly", {
+  counts <- da_example_counts()
+  metadata <- da_example_metadata(rownames(counts))
+  context <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE
+  )
+
+  testthat::local_mocked_bindings(
+    da_optional_package_available = function(package) FALSE,
+    .package = "microeda"
+  )
+
+  expect_error(
+    microeda:::da_run_aldex2(context),
+    "requires the optional package `ALDEx2`",
+    fixed = TRUE
+  )
+})
+
+test_that("da_run_aldex2 errors clearly for pairwise contrast plans", {
+  counts <- matrix(
+    c(
+      10, 0, 1,
+      8, 2, 0,
+      0, 7, 2,
+      1, 6, 3,
+      2, 1, 8,
+      1, 2, 7
+    ),
+    nrow = 6,
+    byrow = TRUE
+  )
+  rownames(counts) <- paste0("S", seq_len(6))
+  colnames(counts) <- paste0("ASV", seq_len(3))
+  metadata <- data.frame(
+    group = c("A", "A", "B", "B", "C", "C"),
+    row.names = rownames(counts)
+  )
+  context <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = "pairwise",
+    methods = "aldex2",
+    taxa_are_rows = FALSE
+  )
+
+  expect_error(
+    microeda:::da_run_aldex2(context),
+    "ALDEx2 pairwise contrast execution is not implemented yet.",
+    fixed = TRUE
+  )
+})
+
+test_that("da_run_aldex2 returns standardized backend results", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_example_counts()
+  metadata <- da_aldex2_example_metadata(rownames(counts))
+  taxonomy <- data.frame(
+    Genus = paste0("Genus", seq_len(ncol(counts))),
+    row.names = colnames(counts)
+  )
+  context <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    tax_rank = "Genus",
+    taxa_are_rows = FALSE
+  )
+
+  backend <- microeda:::da_run_aldex2(context, mc.samples = 16)
+
+  expect_s3_class(backend, "microeda_da_backend_result")
+  expect_equal(backend$method, "aldex2")
+  expect_named(backend$results, da_expected_result_columns())
+  expect_equal(nrow(backend$results), ncol(counts))
+  expect_equal(backend$results$feature_id, colnames(counts))
+  expect_equal(backend$results$taxon_label, taxonomy$Genus)
+  expect_equal(backend$results$rank, rep("Genus", ncol(counts)))
+  expect_true(all(backend$results$method == "aldex2"))
+  expect_true(all(backend$results$contrast == "A_vs_B"))
+  expect_true(all(backend$results$group1 == "A"))
+  expect_true(all(backend$results$group2 == "B"))
+  expect_true(all(backend$results$effect_type == "aldex2_effect"))
+  expect_true(all(is.na(backend$results$log_fold_change)))
+  expect_true(all(is.na(backend$results$statistic)))
+  expect_true(all(is.na(backend$results$standard_error)))
+  expect_true(all(is.na(backend$results$ci_low)))
+  expect_true(all(is.na(backend$results$ci_high)))
+  expect_equal(backend$results$p_adjust_method, rep("aldex2_native_BH", ncol(counts)))
+  expect_equal(backend$results$p_adjust_scope, rep("method_contrast", ncol(counts)))
+  expect_equal(backend$results$direction, rep(NA_character_, ncol(counts)))
+  expect_match(backend$results$method_note[1], "ALDEx2")
+  expect_equal(
+    backend$results$p_value,
+    as.numeric(backend$raw_output$combined$we.ep),
+    tolerance = 1e-12
+  )
+  expect_equal(
+    backend$results$p_adjusted,
+    as.numeric(backend$raw_output$combined$we.eBH),
+    tolerance = 1e-12
+  )
+  expect_true(all(backend$results$significance %in% c("***", "**", "*", "ns", NA)))
+})
+
+test_that("da_run_aldex2 preserves raw output and params", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_example_counts()
+  metadata <- da_aldex2_example_metadata(rownames(counts))
+  context <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE
+  )
+
+  backend <- microeda:::da_run_aldex2(
+    context,
+    mc.samples = 16,
+    denom = "all",
+    paired.test = FALSE
+  )
+
+  expect_named(
+    backend$raw_output,
+    c(
+      "clr",
+      "ttest",
+      "effect",
+      "combined",
+      "conditions",
+      "contrast_row",
+      "input_orientation",
+      "transposed_from_context",
+      "params",
+      "warnings",
+      "messages"
+    )
+  )
+  expect_true(methods::is(backend$raw_output$clr, "aldex.clr"))
+  expect_s3_class(backend$raw_output$ttest, "data.frame")
+  expect_s3_class(backend$raw_output$effect, "data.frame")
+  expect_s3_class(backend$raw_output$combined, "data.frame")
+  expect_equal(rownames(backend$raw_output$combined), colnames(counts))
+  expect_equal(backend$raw_output$conditions, metadata$group)
+  expect_equal(backend$raw_output$contrast_row$contrast, "A_vs_B")
+  expect_equal(backend$raw_output$input_orientation, "feature_by_sample")
+  expect_true(backend$raw_output$transposed_from_context)
+  expect_equal(backend$raw_output$params$mc.samples, 16L)
+  expect_equal(backend$raw_output$params$denom, "all")
+  expect_false(backend$raw_output$params$paired.test)
+  expect_equal(backend$params, backend$raw_output$params)
+})
+
 test_that("da_build_result_object creates internal DA result skeleton", {
   counts <- da_example_counts()
   metadata <- da_example_metadata(rownames(counts))
@@ -633,22 +847,32 @@ test_that("DA skeleton adds no public exports or backend dependencies", {
     "da_standardize_backend_result",
     "da_combine_method_results",
     "da_build_result_object",
-    "da_deduplicate_caveats"
+    "da_deduplicate_caveats",
+    "da_run_aldex2",
+    "da_run_aldex2_contrast",
+    "da_standardize_aldex2_result"
   ) %in% exports))
 
   description <- utils::packageDescription("microeda")
-  dependency_text <- paste(description$Imports, description$Suggests, collapse = ",")
-  expect_false(grepl("\\bALDEx2\\b", dependency_text))
+  imports <- if (is.null(description$Imports)) "" else description$Imports
+  suggests <- if (is.null(description$Suggests)) "" else description$Suggests
+  dependency_text <- paste(imports, suggests, collapse = ",")
+  expect_false(grepl("\\bALDEx2\\b", imports))
+  expect_true(grepl("\\bALDEx2\\b", suggests))
   expect_false(grepl("\\bANCOMBC\\b", dependency_text))
   expect_false(grepl("\\bDESeq2\\b", dependency_text))
 
   da_function_names <- c(
     "da_prepare_context",
+    "da_run_aldex2",
+    "da_run_aldex2_contrast",
+    "da_standardize_aldex2_result",
     "da_backend_result",
     "da_standardize_backend_result",
     "da_combine_method_results",
     "da_build_result_object",
     "da_deduplicate_caveats",
+    "da_p_significance",
     "da_validate_p_adjust_method"
   )
   da_code <- unlist(lapply(da_function_names, function(function_name) {
