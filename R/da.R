@@ -384,8 +384,7 @@ da_build_result_object <- function(context, backend_results) {
     )
   }
 
-  caveats <- rbind(context$caveats, combined$caveats)
-  row.names(caveats) <- NULL
+  caveats <- da_deduplicate_caveats(rbind(context$caveats, combined$caveats))
 
   structure(
     list(
@@ -685,6 +684,21 @@ da_empty_caveats <- function() {
     message = character(),
     stringsAsFactors = FALSE
   )
+}
+
+da_deduplicate_caveats <- function(caveats) {
+  if (is.null(caveats)) {
+    return(da_empty_caveats())
+  }
+
+  da_validate_note_table(caveats)
+  if (nrow(caveats) == 0) {
+    return(caveats)
+  }
+
+  out <- caveats[!duplicated(caveats[names(da_empty_caveats())]), , drop = FALSE]
+  row.names(out) <- NULL
+  out
 }
 
 da_combine_backend_notes <- function(backend_results) {

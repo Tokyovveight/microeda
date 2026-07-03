@@ -514,6 +514,42 @@ test_that("da_combine_method_results aggregates notes with method labels", {
   expect_true(all(combined$caveats$method %in% c("aldex2", "ancombc2")))
 })
 
+test_that("da_deduplicate_caveats collapses exact duplicates stably", {
+  input_note <- microeda:::da_caveat(
+    method = NA_character_,
+    caveat_id = "input_note",
+    topic = "input",
+    severity = "warning",
+    message = "Input-level fixture note."
+  )
+  method_note <- microeda:::da_caveat(
+    method = "aldex2",
+    caveat_id = "method_note",
+    topic = "differential_abundance",
+    severity = "info",
+    message = "Method-level fixture note."
+  )
+  later_note <- microeda:::da_caveat(
+    method = NA_character_,
+    caveat_id = "later_note",
+    topic = "taxonomy",
+    severity = "info",
+    message = "Later fixture note."
+  )
+
+  caveats <- rbind(input_note, method_note, method_note, later_note)
+  deduplicated <- microeda:::da_deduplicate_caveats(caveats)
+
+  expect_equal(nrow(deduplicated), 3L)
+  expect_equal(
+    deduplicated$caveat_id,
+    c("input_note", "method_note", "later_note")
+  )
+  expect_true(is.na(deduplicated$method[1]))
+  expect_equal(deduplicated$method[2], "aldex2")
+  expect_true(is.na(deduplicated$method[3]))
+})
+
 test_that("da_build_result_object creates internal DA result skeleton", {
   counts <- da_example_counts()
   metadata <- da_example_metadata(rownames(counts))
@@ -567,7 +603,21 @@ test_that("da_build_result_object creates internal DA result skeleton", {
   expect_equal(da_result$contrast_label, "A_vs_B")
   expect_named(da_result$feature_metadata, c("feature_id", "Phylum", "Genus"))
   expect_true("method_native_p_adjustment" %in% da_result$caveats$caveat_id)
+  expect_true("small_group_size" %in% da_result$caveats$caveat_id)
+  expect_true("aldex2_compositional_note" %in% da_result$caveats$caveat_id)
   expect_true("deseq2_sensitivity_note" %in% da_result$caveats$caveat_id)
+  expect_equal(
+    sum(da_result$caveats$caveat_id == "aldex2_compositional_note"),
+    1L
+  )
+  expect_equal(
+    sum(da_result$caveats$caveat_id == "deseq2_sensitivity_note"),
+    1L
+  )
+  expect_equal(
+    da_result$caveats$caveat_id[seq_len(nrow(context$caveats))],
+    context$caveats$caveat_id
+  )
 })
 
 test_that("DA skeleton adds no public exports or backend dependencies", {
@@ -582,7 +632,8 @@ test_that("DA skeleton adds no public exports or backend dependencies", {
     "da_validate_backend_result",
     "da_standardize_backend_result",
     "da_combine_method_results",
-    "da_build_result_object"
+    "da_build_result_object",
+    "da_deduplicate_caveats"
   ) %in% exports))
 
   description <- utils::packageDescription("microeda")
@@ -597,6 +648,7 @@ test_that("DA skeleton adds no public exports or backend dependencies", {
     "da_standardize_backend_result",
     "da_combine_method_results",
     "da_build_result_object",
+    "da_deduplicate_caveats",
     "da_validate_p_adjust_method"
   )
   da_code <- unlist(lapply(da_function_names, function(function_name) {
