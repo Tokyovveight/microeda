@@ -30,7 +30,7 @@ da_prepare_context <- function(x,
   group <- da_validate_group(metadata, group)
   group_values <- metadata[[group]]
   names(group_values) <- rownames(metadata)
-  contrast <- da_validate_contrast(
+  contrast_plan <- da_validate_contrast(
     contrast = contrast,
     group_values = group_values,
     group = group
@@ -42,7 +42,7 @@ da_prepare_context <- function(x,
     min_count = min_count
   )
   p_adjust_method <- da_validate_p_adjust_method(p_adjust_method)
-  contrast_label <- paste0(contrast[1], "_vs_", contrast[2])
+  contrast_label <- da_contrast_label(contrast_plan)
   sample_ids <- rownames(counts)
   feature_ids <- colnames(counts)
 
@@ -53,6 +53,7 @@ da_prepare_context <- function(x,
       taxonomy = taxonomy,
       group = group,
       contrast = contrast,
+      contrast_plan = contrast_plan,
       contrast_label = contrast_label,
       methods = methods,
       tax_rank = tax_rank,
@@ -70,6 +71,7 @@ da_prepare_context <- function(x,
       ),
       params = list(
         methods = methods,
+        contrast_plan = contrast_plan,
         tax_rank = tax_rank,
         filters = filters,
         p_adjust_method = p_adjust_method,
@@ -111,10 +113,28 @@ da_validate_methods <- function(methods) {
 }
 
 da_validate_contrast <- function(contrast, group_values = NULL, group = "group") {
-  if (!is.character(contrast) || length(contrast) != 2 ||
+  if (!is.character(contrast) || length(contrast) < 1 ||
       any(is.na(contrast)) || any(!nzchar(contrast))) {
     stop(
-      "`contrast` must be a length-2 character vector of group levels.",
+      "`contrast` must be a length-2 character vector of group levels or \"pairwise\".",
+      call. = FALSE
+    )
+  }
+
+  if (length(contrast) == 1) {
+    if (identical(contrast, "pairwise")) {
+      return(da_pairwise_contrast_plan(group_values = group_values, group = group))
+    }
+
+    stop(
+      "`contrast` must be a length-2 character vector of group levels or \"pairwise\".",
+      call. = FALSE
+    )
+  }
+
+  if (length(contrast) != 2) {
+    stop(
+      "`contrast` must be a length-2 character vector of group levels or \"pairwise\".",
       call. = FALSE
     )
   }
@@ -123,8 +143,9 @@ da_validate_contrast <- function(contrast, group_values = NULL, group = "group")
     stop("`contrast` must contain two different group levels.", call. = FALSE)
   }
 
+  available_levels <- NULL
   if (!is.null(group_values)) {
-    available_levels <- unique(as.character(group_values))
+    available_levels <- da_group_levels(group_values)
     missing_levels <- setdiff(contrast, available_levels)
     if (length(missing_levels) > 0) {
       stop(
@@ -140,7 +161,56 @@ da_validate_contrast <- function(contrast, group_values = NULL, group = "group")
     }
   }
 
-  contrast
+  data.frame(
+    contrast = paste0(contrast[1], "_vs_", contrast[2]),
+    group1 = contrast[1],
+    group2 = contrast[2],
+    contrast_type = "explicit",
+    stringsAsFactors = FALSE
+  )
+}
+
+da_pairwise_contrast_plan <- function(group_values, group = "group") {
+  if (is.null(group_values)) {
+    stop(
+      "`contrast = \"pairwise\"` requires group labels.",
+      call. = FALSE
+    )
+  }
+
+  levels <- da_group_levels(group_values)
+  if (length(levels) < 2) {
+    stop(
+      "`contrast = \"pairwise\"` requires at least two levels in `",
+      group,
+      "`.",
+      call. = FALSE
+    )
+  }
+
+  pairs <- utils::combn(levels, 2)
+  data.frame(
+    contrast = paste0(pairs[1, ], "_vs_", pairs[2, ]),
+    group1 = pairs[1, ],
+    group2 = pairs[2, ],
+    contrast_type = "pairwise",
+    stringsAsFactors = FALSE
+  )
+}
+
+da_group_levels <- function(group_values) {
+  group_labels <- as.character(group_values)
+  group_labels <- group_labels[!is.na(group_labels) & nzchar(group_labels)]
+  unique(group_labels)
+}
+
+da_contrast_label <- function(contrast_plan) {
+  if (nrow(contrast_plan) == 1 &&
+      identical(contrast_plan$contrast_type, "explicit")) {
+    return(contrast_plan$contrast)
+  }
+
+  "pairwise"
 }
 
 da_empty_result <- function() {
@@ -211,6 +281,136 @@ da_standard_result <- function(...) {
   data.frame(columns, stringsAsFactors = FALSE, check.names = FALSE)
 }
 
+da_backend_result <- function(method,
+                              results = da_empty_result(),
+                              raw_output = NULL,
+                              notes = NULL,
+                              params = list()) {
+  method <- da_validate_backend_method(method)
+  if (is.null(notes)) {
+    notes <- da_method_notes(method)
+  }
+
+  out <- structure(
+    list(
+      method = method,
+      results = results,
+      raw_output = raw_output,
+      notes = notes,
+      params = params
+    ),
+    class = "microeda_da_backend_result"
+  )
+
+  da_validate_backend_result(out)
+}
+
+da_validate_backend_result <- function(x) {
+  if (!inherits(x, "microeda_da_backend_result")) {
+    stop("`x` must be a microeda_da_backend_result object.", call. = FALSE)
+  }
+
+  expected_fields <- c("method", "results", "raw_output", "notes", "params")
+  missing_fields <- setdiff(expected_fields, names(x))
+  if (length(missing_fields) > 0) {
+    stop(
+      "`x` is missing backend result field(s): ",
+      paste(missing_fields, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  da_validate_backend_method(x$method)
+  da_validate_standard_result_table(x$results)
+  da_validate_note_table(x$notes)
+  if (!is.list(x$params)) {
+    stop("`x$params` must be a list.", call. = FALSE)
+  }
+
+  invisible(x)
+}
+
+da_standardize_backend_result <- function(x) {
+  da_validate_backend_result(x)
+  x$results
+}
+
+da_combine_method_results <- function(backend_results) {
+  if (!is.list(backend_results) || length(backend_results) < 1) {
+    stop("`backend_results` must be a non-empty list.", call. = FALSE)
+  }
+
+  backend_results <- lapply(backend_results, function(result) {
+    da_validate_backend_result(result)
+    result
+  })
+  methods <- vapply(backend_results, function(result) result$method, character(1))
+  if (anyDuplicated(methods)) {
+    stop("`backend_results` cannot contain duplicate methods.", call. = FALSE)
+  }
+
+  results <- do.call(
+    rbind,
+    lapply(backend_results, da_standardize_backend_result)
+  )
+  row.names(results) <- NULL
+
+  names(backend_results) <- methods
+  raw_outputs <- lapply(backend_results, function(result) result$raw_output)
+  names(raw_outputs) <- methods
+
+  caveats <- da_combine_backend_notes(backend_results)
+
+  list(
+    results = results,
+    method_results = backend_results,
+    raw_outputs = raw_outputs,
+    caveats = caveats,
+    methods = methods
+  )
+}
+
+da_build_result_object <- function(context, backend_results) {
+  if (!inherits(context, "microeda_da_context")) {
+    stop("`context` must be a microeda_da_context object.", call. = FALSE)
+  }
+
+  combined <- da_combine_method_results(backend_results)
+  if (!identical(combined$methods, context$methods)) {
+    stop(
+      "`backend_results` methods must match `context$methods` in order.",
+      call. = FALSE
+    )
+  }
+
+  caveats <- rbind(context$caveats, combined$caveats)
+  row.names(caveats) <- NULL
+
+  structure(
+    list(
+      results = combined$results,
+      method_results = combined$method_results,
+      raw_outputs = combined$raw_outputs,
+      methods = combined$methods,
+      group = context$group,
+      contrast = context$contrast,
+      contrast_plan = context$contrast_plan,
+      contrast_label = context$contrast_label,
+      tax_rank = context$tax_rank,
+      feature_metadata = da_feature_metadata(context),
+      filters = context$filters,
+      caveats = caveats,
+      params = list(
+        context = context$params,
+        backend = lapply(combined$method_results, function(result) result$params)
+      ),
+      call = match.call()
+    ),
+    class = "microeda_da"
+  )
+}
+
 da_method_notes <- function(methods = da_supported_methods()) {
   methods <- da_validate_methods(methods)
   rows <- lapply(methods, da_method_note)
@@ -221,6 +421,53 @@ da_method_notes <- function(methods = da_supported_methods()) {
 
 da_supported_methods <- function() {
   c("aldex2", "ancombc2", "deseq2")
+}
+
+da_validate_backend_method <- function(method) {
+  if (!is.character(method) || length(method) != 1 ||
+      is.na(method) || !nzchar(method)) {
+    stop("`method` must be a single supported DA method ID.", call. = FALSE)
+  }
+
+  da_validate_methods(method)
+}
+
+da_validate_standard_result_table <- function(results) {
+  if (!is.data.frame(results)) {
+    stop("`results` must be a data frame.", call. = FALSE)
+  }
+
+  expected_columns <- names(da_empty_result())
+  if (!identical(names(results), expected_columns)) {
+    stop(
+      "`results` must have exactly the standardized DA result columns.",
+      call. = FALSE
+    )
+  }
+
+  invisible(results)
+}
+
+da_validate_note_table <- function(notes) {
+  if (is.null(notes)) {
+    return(invisible(notes))
+  }
+
+  if (!is.data.frame(notes)) {
+    stop("`notes` must be NULL or a data frame.", call. = FALSE)
+  }
+
+  expected_columns <- names(da_empty_caveats())
+  if (!identical(names(notes), expected_columns)) {
+    stop(
+      "`notes` must have columns: ",
+      paste(expected_columns, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  invisible(notes)
 }
 
 da_validate_counts <- function(counts) {
@@ -427,6 +674,51 @@ da_caveat <- function(method, caveat_id, topic, severity, message) {
     message = message,
     stringsAsFactors = FALSE
   )
+}
+
+da_empty_caveats <- function() {
+  data.frame(
+    method = character(),
+    caveat_id = character(),
+    topic = character(),
+    severity = character(),
+    message = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+da_combine_backend_notes <- function(backend_results) {
+  rows <- lapply(backend_results, function(result) {
+    notes <- result$notes
+    if (is.null(notes) || nrow(notes) == 0) {
+      return(da_empty_caveats())
+    }
+
+    missing_method <- is.na(notes$method) | !nzchar(notes$method)
+    notes$method[missing_method] <- result$method
+    notes
+  })
+
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
+}
+
+da_feature_metadata <- function(context) {
+  out <- data.frame(
+    feature_id = context$feature_ids,
+    stringsAsFactors = FALSE
+  )
+
+  if (!is.null(context$taxonomy)) {
+    out <- cbind(
+      out,
+      as.data.frame(context$taxonomy, stringsAsFactors = FALSE)
+    )
+  }
+
+  row.names(out) <- NULL
+  out
 }
 
 da_recycle_result_value <- function(value, n, column) {
