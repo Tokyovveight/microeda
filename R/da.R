@@ -1,3 +1,136 @@
+#' Run exploratory differential representation with ALDEx2
+#'
+#' `microeda_da()` runs a cautious differential representation workflow for
+#' microbiome count data. In this version, the only implemented backend is
+#' ALDEx2. Results are standardized for downstream use while preserving the raw
+#' backend output in the returned object.
+#'
+#' This helper is exploratory: it uses method-native p-value adjustment, does
+#' not globally re-adjust backend outputs, does not rank methods, and does not
+#' claim ground-truth differentially abundant taxa.
+#'
+#' @param x A `phyloseq` object, count matrix, or count data frame.
+#' @param metadata Optional sample metadata when `x` is a count table.
+#' @param taxonomy Optional taxonomy table.
+#' @param group Metadata column containing group labels.
+#' @param contrast Either a length-2 character vector of group levels or
+#'   `"pairwise"` to run all pairwise group comparisons.
+#' @param methods Differential representation methods to run. Only
+#'   `"aldex2"` is implemented in this version.
+#' @param tax_rank Optional taxonomy rank used for `taxon_label`.
+#' @param prevalence_filter Optional filter value recorded for future use.
+#'   This wrapper does not apply filtering.
+#' @param min_count Optional count filter recorded for future use. This wrapper
+#'   does not apply filtering.
+#' @param p_adjust_method Optional future backend override request. `NULL`
+#'   keeps backend-native/default p-value adjustment.
+#' @param taxa_are_rows Logical; for count tables, whether taxa/features are
+#'   rows.
+#' @param mc.samples Number of Monte Carlo samples passed to ALDEx2.
+#' @param denom Denominator strategy passed to `ALDEx2::aldex.clr()`.
+#' @param paired.test Logical passed to ALDEx2 test/effect helpers.
+#'
+#' @return A `microeda_da` object containing standardized results, method
+#'   results, preserved raw backend outputs, caveats, and parameters.
+#'
+#' @examples
+#' counts <- matrix(
+#'   c(40, 8, 20, 2,
+#'     38, 9, 22, 3,
+#'     42, 7, 19, 2,
+#'     12, 35, 18, 4,
+#'     10, 37, 17, 5,
+#'     11, 33, 20, 4),
+#'   nrow = 6,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- paste0("S", seq_len(6))
+#' colnames(counts) <- paste0("ASV", seq_len(4))
+#' metadata <- data.frame(
+#'   group = c("A", "A", "A", "B", "B", "B"),
+#'   row.names = rownames(counts)
+#' )
+#'
+#' if (requireNamespace("ALDEx2", quietly = TRUE)) {
+#'   da <- microeda_da(
+#'     counts,
+#'     metadata = metadata,
+#'     group = "group",
+#'     contrast = c("A", "B"),
+#'     taxa_are_rows = FALSE,
+#'     mc.samples = 16
+#'   )
+#'   as_da_results(da)
+#' }
+#'
+#' @export
+microeda_da <- function(x,
+                        metadata = NULL,
+                        taxonomy = NULL,
+                        group,
+                        contrast = "pairwise",
+                        methods = "aldex2",
+                        tax_rank = NULL,
+                        prevalence_filter = NULL,
+                        min_count = NULL,
+                        p_adjust_method = NULL,
+                        taxa_are_rows = TRUE,
+                        mc.samples = 128,
+                        denom = "all",
+                        paired.test = FALSE) {
+  methods <- da_validate_methods(methods)
+  unsupported <- setdiff(methods, "aldex2")
+  if (length(unsupported) > 0) {
+    stop(
+      "Only methods = \"aldex2\" is implemented in this version of ",
+      "microeda_da(). ANCOM-BC2 and DESeq2 are planned for later optional ",
+      "backends.",
+      call. = FALSE
+    )
+  }
+
+  context <- da_prepare_context(
+    x = x,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    group = group,
+    contrast = contrast,
+    methods = methods,
+    tax_rank = tax_rank,
+    prevalence_filter = prevalence_filter,
+    min_count = min_count,
+    p_adjust_method = p_adjust_method,
+    taxa_are_rows = taxa_are_rows
+  )
+  backend <- da_run_aldex2(
+    context,
+    mc.samples = mc.samples,
+    denom = denom,
+    paired.test = paired.test
+  )
+  da_build_result_object(context, list(aldex2 = backend))
+}
+
+#' Extract standardized differential representation results
+#'
+#' `as_da_results()` returns the standardized result table from a
+#' `microeda_da` object. Raw backend outputs are preserved separately in
+#' `x$raw_outputs`.
+#'
+#' @param x A `microeda_da` object.
+#'
+#' @return A data frame with the standardized differential representation
+#'   schema.
+#'
+#' @export
+as_da_results <- function(x) {
+  if (!inherits(x, "microeda_da")) {
+    stop("`x` must be a microeda_da object.", call. = FALSE)
+  }
+
+  x$results
+}
+
 da_prepare_context <- function(x,
                                metadata = NULL,
                                taxonomy = NULL,

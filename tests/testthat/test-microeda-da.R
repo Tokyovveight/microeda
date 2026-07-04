@@ -884,6 +884,165 @@ test_that("da_run_aldex2 preserves raw output and params", {
   expect_equal(backend$params, backend$raw_output$params)
 })
 
+test_that("microeda_da returns public DA object for explicit ALDEx2 contrast", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_example_counts()
+  metadata <- da_aldex2_example_metadata(rownames(counts))
+  taxonomy <- data.frame(
+    Genus = paste0("Genus", seq_len(ncol(counts))),
+    row.names = colnames(counts)
+  )
+
+  da <- microeda_da(
+    counts,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    tax_rank = "Genus",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+
+  expect_s3_class(da, "microeda_da")
+  expect_equal(da$methods, "aldex2")
+  expect_equal(da$contrast_label, "A_vs_B")
+  expect_named(da$raw_outputs, "aldex2")
+  expect_named(da$method_results, "aldex2")
+  expect_named(as_da_results(da), da_expected_result_columns())
+  expect_equal(as_da_results(da), da$results)
+  expect_equal(nrow(as_da_results(da)), ncol(counts))
+  expect_true(all(as_da_results(da)$method == "aldex2"))
+  expect_true(all(as_da_results(da)$contrast == "A_vs_B"))
+})
+
+test_that("microeda_da returns public DA object for pairwise ALDEx2 contrast", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_pairwise_counts()
+  metadata <- da_aldex2_pairwise_metadata(rownames(counts))
+  expected_contrasts <- c("A_vs_B", "A_vs_C", "B_vs_C")
+
+  da <- microeda_da(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = "pairwise",
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+
+  expect_s3_class(da, "microeda_da")
+  expect_equal(da$contrast_label, "pairwise")
+  expect_equal(da$contrast_plan$contrast, expected_contrasts)
+  expect_equal(nrow(as_da_results(da)), ncol(counts) * length(expected_contrasts))
+  expect_equal(unique(as_da_results(da)$contrast), expected_contrasts)
+  expect_named(da$raw_outputs$aldex2$contrasts, expected_contrasts)
+})
+
+test_that("as_da_results validates input", {
+  expect_error(
+    as_da_results(list()),
+    "microeda_da"
+  )
+})
+
+test_that("print.microeda_da is compact and points to DA outputs", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_pairwise_counts()
+  metadata <- da_aldex2_pairwise_metadata(rownames(counts))
+  da <- microeda_da(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = "pairwise",
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+
+  output <- capture.output(returned <- print(da))
+
+  expect_identical(returned, da)
+  expect_true(any(grepl("<microeda_da>", output, fixed = TRUE)))
+  expect_true(any(grepl("Methods:", output, fixed = TRUE)))
+  expect_true(any(grepl("Group:", output, fixed = TRUE)))
+  expect_true(any(grepl("Contrasts:", output, fixed = TRUE)))
+  expect_true(any(grepl("Result rows:", output, fixed = TRUE)))
+  expect_true(any(grepl("Caveats:", output, fixed = TRUE)))
+  expect_true(any(grepl("as_da_results", output, fixed = TRUE)))
+  expect_true(any(grepl("raw_outputs", output, fixed = TRUE)))
+  expect_false(any(grepl("ASV1", output, fixed = TRUE)))
+})
+
+test_that("microeda_da rejects planned and unknown methods clearly", {
+  counts <- da_example_counts()
+  metadata <- da_example_metadata(rownames(counts))
+
+  expect_error(
+    microeda_da(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = c("A", "B"),
+      methods = c("aldex2", "ancombc2"),
+      taxa_are_rows = FALSE
+    ),
+    "Only methods = \"aldex2\" is implemented",
+    fixed = TRUE
+  )
+  expect_error(
+    microeda_da(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = c("A", "B"),
+      methods = "deseq2",
+      taxa_are_rows = FALSE
+    ),
+    "Only methods = \"aldex2\" is implemented",
+    fixed = TRUE
+  )
+  expect_error(
+    microeda_da(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = c("A", "B"),
+      methods = "unknown",
+      taxa_are_rows = FALSE
+    ),
+    "Unknown DA method"
+  )
+})
+
+test_that("microeda_da reports missing optional ALDEx2 clearly", {
+  counts <- da_example_counts()
+  metadata <- da_example_metadata(rownames(counts))
+
+  testthat::local_mocked_bindings(
+    da_optional_package_available = function(package) FALSE,
+    .package = "microeda"
+  )
+
+  expect_error(
+    microeda_da(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = c("A", "B"),
+      methods = "aldex2",
+      taxa_are_rows = FALSE
+    ),
+    "requires the optional package `ALDEx2`",
+    fixed = TRUE
+  )
+})
+
 test_that("da_build_result_object creates internal DA result skeleton", {
   counts <- da_example_counts()
   metadata <- da_example_metadata(rownames(counts))
@@ -1032,9 +1191,10 @@ test_that("da_build_result_object still rejects method mismatches", {
   )
 })
 
-test_that("DA skeleton adds no public exports or backend dependencies", {
+test_that("DA public exports are limited and backend dependencies stay optional", {
   exports <- getNamespaceExports("microeda")
-  expect_false("microeda_da" %in% exports)
+  expect_true("microeda_da" %in% exports)
+  expect_true("as_da_results" %in% exports)
   expect_false(any(c(
     "da_prepare_context",
     "da_standard_result",
@@ -1061,6 +1221,8 @@ test_that("DA skeleton adds no public exports or backend dependencies", {
   expect_false(grepl("\\bDESeq2\\b", dependency_text))
 
   da_function_names <- c(
+    "microeda_da",
+    "as_da_results",
     "da_prepare_context",
     "da_run_aldex2",
     "da_run_aldex2_contrast",

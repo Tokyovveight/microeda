@@ -348,6 +348,43 @@ print.microeda_beta_compare_test <- function(x, ...) {
 }
 
 #' @export
+print.microeda_da <- function(x, ...) {
+  cat("<microeda_da>\n")
+  cat("Methods:     ", paste(x$methods, collapse = ", "), "\n", sep = "")
+  cat("Group:       ", x$group, "\n", sep = "")
+
+  if (all(x$contrast_plan$contrast_type == "pairwise")) {
+    cat("Contrasts:   ", nrow(x$contrast_plan), " pairwise\n", sep = "")
+  } else {
+    cat("Contrast:    ", x$contrast_label, "\n", sep = "")
+  }
+
+  cat("Result rows: ", nrow(x$results), "\n", sep = "")
+
+  caveats <- x$caveats
+  cat("Caveats:     ", nrow(caveats), sep = "")
+  if (nrow(caveats) > 0 && "severity" %in% names(caveats)) {
+    severity_counts <- table(caveats$severity)
+    cat(
+      " (",
+      paste0(
+        names(severity_counts),
+        "=",
+        as.integer(severity_counts),
+        collapse = "; "
+      ),
+      ")",
+      sep = ""
+    )
+  }
+  cat("\n")
+
+  cat("\nUse as_da_results(x) for standardized results.\n")
+  cat("Raw backend outputs are available in x$raw_outputs.\n")
+  invisible(x)
+}
+
+#' @export
 print.microeda_beta_compare_ordination <- function(x, ...) {
   cat("<microeda_beta_compare_ordination>\n")
   cat("Methods:            ", paste(x$methods, collapse = ", "), "\n", sep = "")

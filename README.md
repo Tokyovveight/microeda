@@ -21,8 +21,10 @@ The core idea is deliberately conservative:
 
 PERMANOVA-style beta group testing is available when the optional `vegan`
 package is installed and is reported together with dispersion diagnostics.
-Compositional/log-ratio methods, differential abundance methods, and formal
-method ranking are not implemented yet.
+ALDEx2-based exploratory differential representation is available when the
+optional `ALDEx2` package is installed. Compositional/log-ratio methods,
+ANCOM-BC2 and DESeq2 backends, and formal method ranking are not implemented
+yet.
 
 ## First Workflow
 
@@ -111,6 +113,21 @@ if (requireNamespace("vegan", quietly = TRUE)) {
   beta_test <- microeda_beta_test(beta_bray, permutations = 99, seed = 1)
   cat(microeda_beta_test_report(beta_test))
 }
+
+if (requireNamespace("ALDEx2", quietly = TRUE)) {
+  da <- microeda_da(
+    counts,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    tax_rank = "Genus",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+  as_da_results(da)
+}
 ```
 
 For `phyloseq`, pass the object directly:
@@ -186,6 +203,9 @@ if (exists("beta_test")) {
 if (exists("beta_cmp_test")) {
   as_beta_compare_test_summary(beta_cmp_test)
 }
+if (exists("da")) {
+  as_da_results(da)
+}
 ```
 
 ## Beta Group Testing
@@ -228,6 +248,32 @@ The alpha table includes classic indices (`observed`, `chao1`, `shannon`,
 (`hill_q0`, `hill_q1`, `hill_q2`). In practice, `hill_q1 = exp(Shannon)` and
 `hill_q2 = inverse Simpson`, which makes the values easier to interpret as
 effective numbers of taxa.
+
+## Differential Representation
+
+`microeda_da()` currently exposes an ALDEx2-backed exploratory differential
+representation workflow. It uses method-native p-value adjustment, returns
+standardized results with `as_da_results()`, and preserves raw ALDEx2 output in
+`da$raw_outputs`.
+
+```r
+if (requireNamespace("ALDEx2", quietly = TRUE)) {
+  da <- microeda_da(
+    counts,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    group = "group",
+    contrast = "pairwise",
+    methods = "aldex2",
+    tax_rank = "Genus",
+    taxa_are_rows = FALSE
+  )
+  as_da_results(da)
+}
+```
+
+This workflow does not rank methods or claim ground-truth differentially
+abundant taxa. ANCOM-BC2 and DESeq2 are planned as later optional backends.
 
 ## Plots And Ordinations
 
