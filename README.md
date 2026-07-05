@@ -269,6 +269,7 @@ if (requireNamespace("ALDEx2", quietly = TRUE)) {
     taxa_are_rows = FALSE
   )
   as_da_results(da)
+  cat(microeda_da_report(da, top_n = 5))
 }
 ```
 

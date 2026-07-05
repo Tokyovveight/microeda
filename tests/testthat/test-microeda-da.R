@@ -75,6 +75,84 @@ da_fake_backend_result <- function(method,
   )
 }
 
+da_report_fixture <- function(pairwise = FALSE) {
+  if (pairwise) {
+    contrast <- c("A_vs_B", "A_vs_B", "A_vs_C", "A_vs_C")
+    group1 <- c("A", "A", "A", "A")
+    group2 <- c("B", "B", "C", "C")
+    contrast_plan <- data.frame(
+      contrast = c("A_vs_B", "A_vs_C"),
+      group1 = c("A", "A"),
+      group2 = c("B", "C"),
+      contrast_type = "pairwise",
+      stringsAsFactors = FALSE
+    )
+    contrast_label <- "pairwise"
+    contrast_input <- "pairwise"
+  } else {
+    contrast <- rep("A_vs_B", 4)
+    group1 <- rep("A", 4)
+    group2 <- rep("B", 4)
+    contrast_plan <- data.frame(
+      contrast = "A_vs_B",
+      group1 = "A",
+      group2 = "B",
+      contrast_type = "explicit",
+      stringsAsFactors = FALSE
+    )
+    contrast_label <- "A_vs_B"
+    contrast_input <- c("A", "B")
+  }
+
+  results <- microeda:::da_standard_result(
+    feature_id = paste0("ASV", seq_len(4)),
+    taxon_label = paste0("Genus", seq_len(4)),
+    rank = "Genus",
+    method = "aldex2",
+    contrast = contrast,
+    group1 = group1,
+    group2 = group2,
+    effect = c(0.4, -0.2, 3.1, 1.7),
+    effect_type = "aldex2_effect",
+    p_value = c(0.18, NA, 0.009, 0.031),
+    p_adjusted = c(0.2, NA, 0.01, 0.04),
+    p_adjust_method = "aldex2_native_BH",
+    p_adjust_scope = "method_contrast",
+    significance = c("ns", NA, "**", "*"),
+    method_note = "ALDEx2 note"
+  )
+
+  structure(
+    list(
+      results = results,
+      method_results = list(aldex2 = list(results = results)),
+      raw_outputs = list(aldex2 = list(fixture = TRUE)),
+      methods = "aldex2",
+      group = "group",
+      contrast = contrast_input,
+      contrast_plan = contrast_plan,
+      contrast_label = contrast_label,
+      tax_rank = "Genus",
+      feature_metadata = data.frame(
+        feature_id = paste0("ASV", seq_len(4)),
+        Genus = paste0("Genus", seq_len(4)),
+        stringsAsFactors = FALSE
+      ),
+      filters = list(),
+      caveats = microeda:::da_caveat(
+        method = NA_character_,
+        caveat_id = "method_native_p_adjustment",
+        topic = "differential_abundance",
+        severity = "info",
+        message = "Use method-native adjustment."
+      ),
+      params = list(),
+      call = quote(microeda_da())
+    ),
+    class = "microeda_da"
+  )
+}
+
 da_aldex2_example_counts <- function() {
   counts <- matrix(
     c(
@@ -979,6 +1057,111 @@ test_that("print.microeda_da is compact and points to DA outputs", {
   expect_false(any(grepl("ASV1", output, fixed = TRUE)))
 })
 
+test_that("microeda_da_report returns compact character output", {
+  da <- da_report_fixture()
+  report <- microeda_da_report(da, top_n = 3, alpha = 0.05, digits = 3)
+
+  expect_type(report, "character")
+  expect_length(report, 1L)
+  expect_match(report, "microeda differential representation report", fixed = TRUE)
+  expect_match(report, "Methods: aldex2", fixed = TRUE)
+  expect_match(report, "Group: group", fixed = TRUE)
+  expect_match(report, "Contrast: A_vs_B", fixed = TRUE)
+  expect_match(report, "Result rows: 4", fixed = TRUE)
+  expect_match(report, "Unique features: 4", fixed = TRUE)
+  expect_match(report, "Contrasts: 1", fixed = TRUE)
+  expect_match(report, "p_adjust_method: aldex2_native_BH", fixed = TRUE)
+  expect_match(report, "Backend-native/method-specific adjustment is used", fixed = TRUE)
+  expect_match(report, "Caveats:", fixed = TRUE)
+  expect_match(
+    report,
+    "These rows are exploratory method outputs, not confirmed biological discoveries.",
+    fixed = TRUE
+  )
+  expect_match(report, "x$raw_outputs", fixed = TRUE)
+  expect_match(report, "as_da_results(x)", fixed = TRUE)
+})
+
+test_that("microeda_da_report sorts and limits top rows", {
+  da <- da_report_fixture()
+  report <- microeda_da_report(da, top_n = 2, alpha = 0.05, digits = 3)
+
+  asv3_position <- regexpr("ASV3", report, fixed = TRUE)[[1]]
+  asv4_position <- regexpr("ASV4", report, fixed = TRUE)[[1]]
+  asv1_position <- regexpr("ASV1", report, fixed = TRUE)[[1]]
+  asv2_position <- regexpr("ASV2", report, fixed = TRUE)[[1]]
+
+  expect_gt(asv3_position, 0L)
+  expect_gt(asv4_position, 0L)
+  expect_lt(asv3_position, asv4_position)
+  expect_equal(asv1_position, -1L)
+  expect_equal(asv2_position, -1L)
+})
+
+test_that("microeda_da_report alpha threshold affects per-contrast counts", {
+  da <- da_report_fixture()
+  report_005 <- microeda_da_report(da, top_n = 0, alpha = 0.05, digits = 3)
+  report_002 <- microeda_da_report(da, top_n = 0, alpha = 0.02, digits = 3)
+
+  expect_match(report_005, "A_vs_B\\s+4\\s+2\\s+0\\.01")
+  expect_match(report_002, "A_vs_B\\s+4\\s+1\\s+0\\.01")
+  expect_match(report_005, "No top rows requested.", fixed = TRUE)
+})
+
+test_that("microeda_da_report works for explicit and pairwise DA objects", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_example_counts()
+  metadata <- da_aldex2_example_metadata(rownames(counts))
+  da_explicit <- microeda_da(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+  before <- as_da_results(da_explicit)
+  explicit_report <- microeda_da_report(da_explicit, top_n = 2)
+
+  expect_match(explicit_report, "Contrast: A_vs_B", fixed = TRUE)
+  expect_equal(as_da_results(da_explicit), before)
+
+  pairwise_counts <- da_aldex2_pairwise_counts()
+  pairwise_metadata <- da_aldex2_pairwise_metadata(rownames(pairwise_counts))
+  da_pairwise <- microeda_da(
+    pairwise_counts,
+    metadata = pairwise_metadata,
+    group = "group",
+    contrast = "pairwise",
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+  pairwise_report <- microeda_da_report(da_pairwise, top_n = 2)
+
+  expect_match(pairwise_report, "Pairwise contrasts: 3", fixed = TRUE)
+  expect_match(pairwise_report, "A_vs_B", fixed = TRUE)
+  expect_match(pairwise_report, "A_vs_C", fixed = TRUE)
+  expect_match(pairwise_report, "B_vs_C", fixed = TRUE)
+})
+
+test_that("microeda_da_report validates inputs clearly", {
+  da <- da_report_fixture()
+
+  expect_error(microeda_da_report(list()), "microeda_da")
+  expect_error(microeda_da_report(da, top_n = -1), "top_n")
+  expect_error(microeda_da_report(da, top_n = 1.5), "top_n")
+  expect_error(microeda_da_report(da, top_n = c(1, 2)), "top_n")
+  expect_error(microeda_da_report(da, alpha = -0.1), "alpha")
+  expect_error(microeda_da_report(da, alpha = 1.1), "alpha")
+  expect_error(microeda_da_report(da, alpha = c(0.01, 0.05)), "alpha")
+  expect_error(microeda_da_report(da, digits = -1), "digits")
+  expect_error(microeda_da_report(da, digits = 1.2), "digits")
+  expect_error(microeda_da_report(da, digits = c(2, 3)), "digits")
+})
+
 test_that("microeda_da rejects planned and unknown methods clearly", {
   counts <- da_example_counts()
   metadata <- da_example_metadata(rownames(counts))
@@ -1195,6 +1378,7 @@ test_that("DA public exports are limited and backend dependencies stay optional"
   exports <- getNamespaceExports("microeda")
   expect_true("microeda_da" %in% exports)
   expect_true("as_da_results" %in% exports)
+  expect_true("microeda_da_report" %in% exports)
   expect_false(any(c(
     "da_prepare_context",
     "da_standard_result",
@@ -1208,7 +1392,10 @@ test_that("DA public exports are limited and backend dependencies stay optional"
     "da_deduplicate_caveats",
     "da_run_aldex2",
     "da_run_aldex2_contrast",
-    "da_standardize_aldex2_result"
+    "da_standardize_aldex2_result",
+    "da_report_contrast_summary",
+    "da_report_top_rows",
+    "da_report_table_lines"
   ) %in% exports))
 
   description <- utils::packageDescription("microeda")
@@ -1223,6 +1410,7 @@ test_that("DA public exports are limited and backend dependencies stay optional"
   da_function_names <- c(
     "microeda_da",
     "as_da_results",
+    "microeda_da_report",
     "da_prepare_context",
     "da_run_aldex2",
     "da_run_aldex2_contrast",

@@ -131,6 +131,152 @@ as_da_results <- function(x) {
   x$results
 }
 
+#' Create a compact differential representation text report
+#'
+#' `microeda_da_report()` formats a `microeda_da` object as a plain-text,
+#' console-friendly report. It summarizes contrasts, adjusted p-value counts,
+#' selected standardized rows, caveats, and where to find standardized and raw
+#' backend outputs.
+#'
+#' The report is descriptive and exploratory. It does not change differential
+#' representation calculations, globally re-adjust p-values, rank methods, or
+#' claim confirmed biological discoveries.
+#'
+#' @param x A `microeda_da` object.
+#' @param top_n Number of top standardized rows to show after sorting by
+#'   `p_adjusted` ascending with missing values last. Use `0` to omit top rows.
+#' @param alpha Adjusted p-value threshold used for per-contrast counts.
+#' @param digits Number of digits used for numeric report values.
+#'
+#' @return A single character string suitable for `cat()`.
+#'
+#' @examples
+#' counts <- matrix(
+#'   c(40, 8, 20, 2,
+#'     38, 9, 22, 3,
+#'     42, 7, 19, 2,
+#'     12, 35, 18, 4,
+#'     10, 37, 17, 5,
+#'     11, 33, 20, 4),
+#'   nrow = 6,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- paste0("S", seq_len(6))
+#' colnames(counts) <- paste0("ASV", seq_len(4))
+#' metadata <- data.frame(
+#'   group = c("A", "A", "A", "B", "B", "B"),
+#'   row.names = rownames(counts)
+#' )
+#'
+#' if (requireNamespace("ALDEx2", quietly = TRUE)) {
+#'   da <- microeda_da(
+#'     counts,
+#'     metadata = metadata,
+#'     group = "group",
+#'     contrast = c("A", "B"),
+#'     taxa_are_rows = FALSE,
+#'     mc.samples = 16
+#'   )
+#'   cat(microeda_da_report(da, top_n = 5))
+#' }
+#'
+#' @export
+microeda_da_report <- function(x, top_n = 10, alpha = 0.05, digits = 3) {
+  if (!inherits(x, "microeda_da")) {
+    stop("`x` must be a microeda_da object.", call. = FALSE)
+  }
+
+  top_n <- da_validate_report_integer(top_n, "top_n")
+  alpha <- da_validate_report_alpha(alpha)
+  digits <- da_validate_report_integer(digits, "digits")
+
+  results <- as_da_results(x)
+  contrast_values <- unique(results$contrast)
+  contrast_values <- contrast_values[!is.na(contrast_values) & nzchar(contrast_values)]
+  p_adjust_methods <- unique(results$p_adjust_method)
+  p_adjust_methods <- da_report_value(p_adjust_methods)
+
+  lines <- c(
+    "microeda differential representation report",
+    "",
+    paste0("Methods: ", paste(x$methods, collapse = ", ")),
+    paste0("Group: ", x$group)
+  )
+
+  if (all(x$contrast_plan$contrast_type == "pairwise")) {
+    lines <- c(lines, paste0("Pairwise contrasts: ", nrow(x$contrast_plan)))
+  } else {
+    lines <- c(lines, paste0("Contrast: ", x$contrast_label))
+  }
+
+  lines <- c(
+    lines,
+    paste0("Result rows: ", nrow(results)),
+    paste0("Unique features: ", length(unique(results$feature_id))),
+    paste0("Contrasts: ", length(contrast_values)),
+    "",
+    "P-value adjustment:",
+    paste0("p_adjust_method: ", paste(p_adjust_methods, collapse = ", ")),
+    paste(
+      "Backend-native/method-specific adjustment is used;",
+      "microeda does not globally re-adjust backend outputs."
+    ),
+    "",
+    "Per-contrast summary:"
+  )
+
+  lines <- c(
+    lines,
+    da_report_table_lines(
+      da_report_contrast_summary(results, alpha = alpha),
+      digits = digits
+    ),
+    "",
+    "Top standardized rows by adjusted p-value:"
+  )
+
+  if (top_n == 0L) {
+    lines <- c(lines, "No top rows requested.")
+  } else {
+    top_rows <- da_report_top_rows(results, top_n = top_n)
+    lines <- c(
+      lines,
+      da_report_table_lines(
+        top_rows[
+          ,
+          c(
+            "method",
+            "contrast",
+            "feature_id",
+            "taxon_label",
+            "effect",
+            "p_value",
+            "p_adjusted",
+            "significance"
+          ),
+          drop = FALSE
+        ],
+        digits = digits
+      )
+    )
+  }
+
+  lines <- c(
+    lines,
+    "",
+    "Caveats:",
+    da_report_caveat_lines(x$caveats),
+    "",
+    "These rows are exploratory method outputs, not confirmed biological discoveries.",
+    "",
+    "Raw output:",
+    "Raw backend outputs are in x$raw_outputs.",
+    "Standardized table is available with as_da_results(x)."
+  )
+
+  paste(lines, collapse = "\n")
+}
+
 da_prepare_context <- function(x,
                                metadata = NULL,
                                taxonomy = NULL,
@@ -917,6 +1063,30 @@ da_validate_aldex2_params <- function(mc.samples, denom, paired.test) {
   )
 }
 
+da_validate_report_integer <- function(x, name) {
+  if (!is.numeric(x) || length(x) != 1 ||
+      is.na(x) || !is.finite(x) || x < 0 || x != floor(x)) {
+    stop(
+      "`",
+      name,
+      "` must be a single non-negative integer-like number.",
+      call. = FALSE
+    )
+  }
+
+  as.integer(x)
+}
+
+da_validate_report_alpha <- function(alpha) {
+  if (!is.numeric(alpha) || length(alpha) != 1 ||
+      is.na(alpha) || !is.finite(alpha) ||
+      alpha < 0 || alpha > 1) {
+    stop("`alpha` must be a single numeric value between 0 and 1.", call. = FALSE)
+  }
+
+  alpha
+}
+
 da_optional_package_available <- function(package) {
   requireNamespace(package, quietly = TRUE)
 }
@@ -1163,4 +1333,136 @@ da_recycle_result_value <- function(value, n, column) {
     "` must have length 1 or match the number of result rows.",
     call. = FALSE
   )
+}
+
+da_report_contrast_summary <- function(results, alpha) {
+  out <- data.frame(
+    contrast = character(),
+    tested_features = integer(),
+    p_adjusted_le_alpha = integer(),
+    min_p_adjusted = numeric(),
+    stringsAsFactors = FALSE
+  )
+
+  if (nrow(results) == 0) {
+    return(out)
+  }
+
+  contrast_values <- unique(results$contrast)
+  rows <- lapply(contrast_values, function(contrast) {
+    rows <- results[results$contrast == contrast, , drop = FALSE]
+    p_adjusted <- rows$p_adjusted
+    p_adjusted_present <- !is.na(p_adjusted)
+    min_p_adjusted <- if (any(p_adjusted_present)) {
+      min(p_adjusted[p_adjusted_present])
+    } else {
+      NA_real_
+    }
+
+    data.frame(
+      contrast = contrast,
+      tested_features = length(unique(rows$feature_id)),
+      p_adjusted_le_alpha = sum(p_adjusted_present & p_adjusted <= alpha),
+      min_p_adjusted = min_p_adjusted,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
+}
+
+da_report_top_rows <- function(results, top_n) {
+  if (nrow(results) == 0) {
+    return(results[0, , drop = FALSE])
+  }
+
+  order_index <- order(is.na(results$p_adjusted), results$p_adjusted)
+  sorted <- results[order_index, , drop = FALSE]
+  sorted[seq_len(min(top_n, nrow(sorted))), , drop = FALSE]
+}
+
+da_report_table_lines <- function(data, digits) {
+  if (!is.data.frame(data)) {
+    stop("`data` must be a data frame.", call. = FALSE)
+  }
+
+  headers <- names(data)
+  if (length(headers) == 0) {
+    return("No columns.")
+  }
+
+  formatted <- lapply(data, function(column) {
+    if (is.numeric(column)) {
+      return(da_report_number(column, digits = digits))
+    }
+
+    da_report_value(column)
+  })
+
+  widths <- vapply(seq_along(headers), function(i) {
+    max(nchar(c(headers[i], formatted[[i]])), na.rm = TRUE)
+  }, integer(1))
+
+  format_row <- function(values) {
+    paste(
+      vapply(seq_along(values), function(i) {
+        paste0(values[[i]], strrep(" ", widths[[i]] - nchar(values[[i]])))
+      }, character(1)),
+      collapse = "  "
+    )
+  }
+
+  lines <- format_row(headers)
+  if (nrow(data) == 0) {
+    return(c(lines, "No rows available."))
+  }
+
+  row_lines <- vapply(seq_len(nrow(data)), function(i) {
+    format_row(vapply(formatted, `[[`, character(1), i))
+  }, character(1))
+
+  c(lines, row_lines)
+}
+
+da_report_number <- function(x, digits) {
+  out <- format(round(x, digits), trim = TRUE, scientific = FALSE)
+  out[is.na(x)] <- "NA"
+  out
+}
+
+da_report_value <- function(x) {
+  if (length(x) == 0) {
+    return("NA")
+  }
+
+  out <- as.character(x)
+  out[is.na(out) | !nzchar(out)] <- "NA"
+  out
+}
+
+da_report_caveat_lines <- function(caveats) {
+  if (is.null(caveats) || nrow(caveats) == 0) {
+    return("None.")
+  }
+
+  vapply(seq_len(nrow(caveats)), function(i) {
+    row <- caveats[i, , drop = FALSE]
+    method <- if (is.na(row$method) || !nzchar(row$method)) {
+      "input"
+    } else {
+      row$method
+    }
+    paste0(
+      "- [",
+      row$severity,
+      "] ",
+      method,
+      "/",
+      row$caveat_id,
+      ": ",
+      row$message
+    )
+  }, character(1))
 }

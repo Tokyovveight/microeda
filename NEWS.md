@@ -43,6 +43,8 @@
 * Added a compact print method for beta compare test objects.
 * Added an exported ALDEx2-backed `microeda_da()` workflow with standardized
   `as_da_results()` output and preserved raw backend results.
+* Added `microeda_da_report()` for compact readable reports from
+  `microeda_da` results.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.
