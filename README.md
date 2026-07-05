@@ -270,6 +270,7 @@ if (requireNamespace("ALDEx2", quietly = TRUE)) {
   )
   as_da_results(da)
   cat(microeda_da_report(da, top_n = 5))
+  write_da_results(da, "microeda_da_results.csv")
 }
 ```
 

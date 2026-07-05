@@ -277,6 +277,79 @@ microeda_da_report <- function(x, top_n = 10, alpha = 0.05, digits = 3) {
   paste(lines, collapse = "\n")
 }
 
+#' Write standardized differential representation results to CSV
+#'
+#' `write_da_results()` writes only the standardized result table returned by
+#' `as_da_results(x)`. Raw backend outputs are not exported or serialized by
+#' this helper; they remain available in `x$raw_outputs`.
+#'
+#' Exported rows are exploratory method outputs, not confirmed biological
+#' discoveries.
+#'
+#' @param x A `microeda_da` object.
+#' @param file Single non-empty character path for the output CSV file.
+#' @param na String used for missing values in the CSV.
+#' @param quote Logical; passed to `utils::write.csv()`.
+#'
+#' @return The output file path, invisibly.
+#'
+#' @examples
+#' counts <- matrix(
+#'   c(40, 8, 20, 2,
+#'     38, 9, 22, 3,
+#'     42, 7, 19, 2,
+#'     12, 35, 18, 4,
+#'     10, 37, 17, 5,
+#'     11, 33, 20, 4),
+#'   nrow = 6,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- paste0("S", seq_len(6))
+#' colnames(counts) <- paste0("ASV", seq_len(4))
+#' metadata <- data.frame(
+#'   group = c("A", "A", "A", "B", "B", "B"),
+#'   row.names = rownames(counts)
+#' )
+#'
+#' if (requireNamespace("ALDEx2", quietly = TRUE)) {
+#'   da <- microeda_da(
+#'     counts,
+#'     metadata = metadata,
+#'     group = "group",
+#'     contrast = c("A", "B"),
+#'     taxa_are_rows = FALSE,
+#'     mc.samples = 16
+#'   )
+#'   write_da_results(da, tempfile(fileext = ".csv"))
+#' }
+#'
+#' @export
+write_da_results <- function(x, file, na = "", quote = TRUE) {
+  if (!inherits(x, "microeda_da")) {
+    stop("`x` must be a microeda_da object.", call. = FALSE)
+  }
+  if (!is.character(file) || length(file) != 1 ||
+      is.na(file) || !nzchar(file)) {
+    stop("`file` must be a single non-empty character path.", call. = FALSE)
+  }
+  if (!is.character(na) || length(na) != 1 || is.na(na)) {
+    stop("`na` must be a single character value.", call. = FALSE)
+  }
+  if (!is.logical(quote) || length(quote) != 1 || is.na(quote)) {
+    stop("`quote` must be a single TRUE/FALSE value.", call. = FALSE)
+  }
+
+  utils::write.csv(
+    as_da_results(x),
+    file = file,
+    row.names = FALSE,
+    na = na,
+    quote = quote
+  )
+
+  invisible(file)
+}
+
 da_prepare_context <- function(x,
                                metadata = NULL,
                                taxonomy = NULL,

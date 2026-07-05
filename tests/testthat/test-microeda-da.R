@@ -1162,6 +1162,119 @@ test_that("microeda_da_report validates inputs clearly", {
   expect_error(microeda_da_report(da, digits = c(2, 3)), "digits")
 })
 
+test_that("write_da_results writes standardized DA CSV only", {
+  da <- da_report_fixture()
+  before <- as_da_results(da)
+  file <- tempfile(fileext = ".csv")
+
+  returned <- write_da_results(da, file)
+  after <- as_da_results(da)
+  csv <- utils::read.csv(
+    file,
+    stringsAsFactors = FALSE,
+    check.names = FALSE,
+    na.strings = ""
+  )
+  raw_lines <- readLines(file, warn = FALSE)
+
+  expect_identical(returned, file)
+  expect_true(file.exists(file))
+  expect_named(csv, da_expected_result_columns())
+  expect_false(any(names(csv) %in% c("", "X", "row.names")))
+  expect_equal(nrow(csv), nrow(before))
+  expect_equal(csv$feature_id, before$feature_id)
+  expect_equal(csv$method, before$method)
+  expect_equal(csv$contrast, before$contrast)
+  expect_equal(csv$taxon_label, before$taxon_label)
+  expect_equal(csv$p_adjusted, before$p_adjusted)
+  expect_false(any(grepl("raw_outputs", raw_lines, fixed = TRUE)))
+  expect_false(any(grepl("fixture", raw_lines, fixed = TRUE)))
+  expect_equal(after, before)
+
+  invisible_file <- tempfile(fileext = ".csv")
+  output <- capture.output(
+    visible_result <- withVisible(write_da_results(da, invisible_file))
+  )
+  expect_equal(output, character())
+  expect_false(visible_result$visible)
+  expect_identical(visible_result$value, invisible_file)
+})
+
+test_that("write_da_results validates inputs clearly", {
+  da <- da_report_fixture()
+  file <- tempfile(fileext = ".csv")
+
+  expect_error(write_da_results(list(), file), "microeda_da")
+  expect_error(write_da_results(da, ""), "file")
+  expect_error(write_da_results(da, NA_character_), "file")
+  expect_error(write_da_results(da, c(file, file)), "file")
+  expect_error(write_da_results(da, file, na = c("", "NA")), "na")
+  expect_error(write_da_results(da, file, na = NA_character_), "na")
+  expect_error(write_da_results(da, file, quote = c(TRUE, FALSE)), "quote")
+  expect_error(write_da_results(da, file, quote = NA), "quote")
+  expect_error(write_da_results(da, file, quote = "TRUE"), "quote")
+})
+
+test_that("write_da_results works for explicit and pairwise DA objects", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_example_counts()
+  metadata <- da_aldex2_example_metadata(rownames(counts))
+  da_explicit <- microeda_da(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+  explicit_file <- tempfile(fileext = ".csv")
+  explicit_before <- as_da_results(da_explicit)
+  explicit_returned <- write_da_results(da_explicit, explicit_file)
+  explicit_csv <- utils::read.csv(
+    explicit_file,
+    stringsAsFactors = FALSE,
+    check.names = FALSE,
+    na.strings = ""
+  )
+
+  expect_identical(explicit_returned, explicit_file)
+  expect_named(explicit_csv, da_expected_result_columns())
+  expect_equal(nrow(explicit_csv), nrow(explicit_before))
+  expect_equal(explicit_csv$feature_id, explicit_before$feature_id)
+  expect_equal(explicit_csv$contrast, explicit_before$contrast)
+  expect_equal(as_da_results(da_explicit), explicit_before)
+
+  pairwise_counts <- da_aldex2_pairwise_counts()
+  pairwise_metadata <- da_aldex2_pairwise_metadata(rownames(pairwise_counts))
+  da_pairwise <- microeda_da(
+    pairwise_counts,
+    metadata = pairwise_metadata,
+    group = "group",
+    contrast = "pairwise",
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+  pairwise_file <- tempfile(fileext = ".csv")
+  pairwise_before <- as_da_results(da_pairwise)
+  pairwise_returned <- write_da_results(da_pairwise, pairwise_file)
+  pairwise_csv <- utils::read.csv(
+    pairwise_file,
+    stringsAsFactors = FALSE,
+    check.names = FALSE,
+    na.strings = ""
+  )
+
+  expect_identical(pairwise_returned, pairwise_file)
+  expect_named(pairwise_csv, da_expected_result_columns())
+  expect_equal(nrow(pairwise_csv), nrow(pairwise_before))
+  expect_equal(unique(pairwise_csv$contrast), c("A_vs_B", "A_vs_C", "B_vs_C"))
+  expect_false(any(grepl("raw_outputs", readLines(pairwise_file, warn = FALSE), fixed = TRUE)))
+  expect_equal(as_da_results(da_pairwise), pairwise_before)
+})
+
 test_that("microeda_da rejects planned and unknown methods clearly", {
   counts <- da_example_counts()
   metadata <- da_example_metadata(rownames(counts))
@@ -1379,6 +1492,7 @@ test_that("DA public exports are limited and backend dependencies stay optional"
   expect_true("microeda_da" %in% exports)
   expect_true("as_da_results" %in% exports)
   expect_true("microeda_da_report" %in% exports)
+  expect_true("write_da_results" %in% exports)
   expect_false(any(c(
     "da_prepare_context",
     "da_standard_result",
@@ -1411,6 +1525,7 @@ test_that("DA public exports are limited and backend dependencies stay optional"
     "microeda_da",
     "as_da_results",
     "microeda_da_report",
+    "write_da_results",
     "da_prepare_context",
     "da_run_aldex2",
     "da_run_aldex2_contrast",
