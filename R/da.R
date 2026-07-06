@@ -131,6 +131,62 @@ as_da_results <- function(x) {
   x$results
 }
 
+#' Summarize standardized differential representation results by contrast
+#'
+#' `as_da_summary()` returns one compact row per method and contrast from the
+#' standardized table returned by `as_da_results(x)`. Raw backend outputs are
+#' not inspected or serialized by this helper; they remain available in
+#' `x$raw_outputs`.
+#'
+#' Summary rows describe exploratory differential representation outputs, not
+#' confirmed biological discoveries.
+#'
+#' @param x A `microeda_da` object.
+#' @param alpha Adjusted p-value threshold used for summary counts.
+#'
+#' @return A base `data.frame` with one row per method and contrast.
+#'
+#' @examples
+#' counts <- matrix(
+#'   c(40, 8, 20, 2,
+#'     38, 9, 22, 3,
+#'     42, 7, 19, 2,
+#'     12, 35, 18, 4,
+#'     10, 37, 17, 5,
+#'     11, 33, 20, 4),
+#'   nrow = 6,
+#'   byrow = TRUE
+#' )
+#' rownames(counts) <- paste0("S", seq_len(6))
+#' colnames(counts) <- paste0("ASV", seq_len(4))
+#' metadata <- data.frame(
+#'   group = c("A", "A", "A", "B", "B", "B"),
+#'   row.names = rownames(counts)
+#' )
+#'
+#' if (requireNamespace("ALDEx2", quietly = TRUE)) {
+#'   da <- microeda_da(
+#'     counts,
+#'     metadata = metadata,
+#'     group = "group",
+#'     contrast = c("A", "B"),
+#'     taxa_are_rows = FALSE,
+#'     mc.samples = 16
+#'   )
+#'   as_da_summary(da)
+#' }
+#'
+#' @export
+as_da_summary <- function(x, alpha = 0.05) {
+  if (!inherits(x, "microeda_da")) {
+    stop("`x` must be a microeda_da object.", call. = FALSE)
+  }
+  alpha <- da_validate_report_alpha(alpha)
+
+  results <- as_da_results(x)
+  da_summary_from_results(results, alpha = alpha)
+}
+
 #' Create a compact differential representation text report
 #'
 #' `microeda_da_report()` formats a `microeda_da` object as a plain-text,
@@ -1444,6 +1500,109 @@ da_report_contrast_summary <- function(results, alpha) {
   out <- do.call(rbind, rows)
   row.names(out) <- NULL
   out
+}
+
+da_summary_from_results <- function(results, alpha) {
+  out <- da_empty_summary()
+  if (nrow(results) == 0) {
+    return(out)
+  }
+
+  keys <- unique(results[c("method", "contrast")])
+  rows <- lapply(seq_len(nrow(keys)), function(i) {
+    method <- keys$method[[i]]
+    contrast <- keys$contrast[[i]]
+    group_rows <- results[
+      results$method == method & results$contrast == contrast,
+      ,
+      drop = FALSE
+    ]
+    da_summary_row(group_rows, alpha = alpha)
+  })
+
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
+}
+
+da_empty_summary <- function() {
+  data.frame(
+    method = character(),
+    contrast = character(),
+    group1 = character(),
+    group2 = character(),
+    tested_features = integer(),
+    n_p_value = integer(),
+    n_p_adjusted = integer(),
+    n_p_adjusted_le_alpha = integer(),
+    min_p_adjusted = numeric(),
+    top_feature_id = character(),
+    top_taxon_label = character(),
+    top_effect = numeric(),
+    top_p_adjusted = numeric(),
+    p_adjust_method = character(),
+    p_adjust_scope = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+da_summary_row <- function(rows, alpha) {
+  p_value_present <- !is.na(rows$p_value)
+  p_adjusted_present <- !is.na(rows$p_adjusted)
+  top_index <- da_summary_top_index(rows$p_adjusted)
+
+  if (is.na(top_index)) {
+    top_feature_id <- NA_character_
+    top_taxon_label <- NA_character_
+    top_effect <- NA_real_
+    top_p_adjusted <- NA_real_
+  } else {
+    top_feature_id <- rows$feature_id[[top_index]]
+    top_taxon_label <- rows$taxon_label[[top_index]]
+    top_effect <- rows$effect[[top_index]]
+    top_p_adjusted <- rows$p_adjusted[[top_index]]
+  }
+
+  data.frame(
+    method = da_summary_collapse_unique(rows$method),
+    contrast = da_summary_collapse_unique(rows$contrast),
+    group1 = da_summary_collapse_unique(rows$group1),
+    group2 = da_summary_collapse_unique(rows$group2),
+    tested_features = length(unique(rows$feature_id)),
+    n_p_value = sum(p_value_present),
+    n_p_adjusted = sum(p_adjusted_present),
+    n_p_adjusted_le_alpha = sum(p_adjusted_present & rows$p_adjusted <= alpha),
+    min_p_adjusted = if (any(p_adjusted_present)) {
+      min(rows$p_adjusted[p_adjusted_present])
+    } else {
+      NA_real_
+    },
+    top_feature_id = top_feature_id,
+    top_taxon_label = top_taxon_label,
+    top_effect = top_effect,
+    top_p_adjusted = top_p_adjusted,
+    p_adjust_method = da_summary_collapse_unique(rows$p_adjust_method),
+    p_adjust_scope = da_summary_collapse_unique(rows$p_adjust_scope),
+    stringsAsFactors = FALSE
+  )
+}
+
+da_summary_top_index <- function(p_adjusted) {
+  present <- which(!is.na(p_adjusted))
+  if (length(present) == 0) {
+    return(NA_integer_)
+  }
+
+  present[which.min(p_adjusted[present])]
+}
+
+da_summary_collapse_unique <- function(x) {
+  values <- unique(as.character(x[!is.na(x) & nzchar(as.character(x))]))
+  if (length(values) == 0) {
+    return(NA_character_)
+  }
+
+  paste(values, collapse = "; ")
 }
 
 da_report_top_rows <- function(results, top_n) {

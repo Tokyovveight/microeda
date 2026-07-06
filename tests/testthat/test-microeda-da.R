@@ -48,6 +48,26 @@ da_expected_result_columns <- function() {
   )
 }
 
+da_expected_summary_columns <- function() {
+  c(
+    "method",
+    "contrast",
+    "group1",
+    "group2",
+    "tested_features",
+    "n_p_value",
+    "n_p_adjusted",
+    "n_p_adjusted_le_alpha",
+    "min_p_adjusted",
+    "top_feature_id",
+    "top_taxon_label",
+    "top_effect",
+    "top_p_adjusted",
+    "p_adjust_method",
+    "p_adjust_scope"
+  )
+}
+
 da_fake_backend_result <- function(method,
                                    features = c("ASV1", "ASV2"),
                                    raw_output = list(fixture = method),
@@ -1057,6 +1077,143 @@ test_that("print.microeda_da is compact and points to DA outputs", {
   expect_false(any(grepl("ASV1", output, fixed = TRUE)))
 })
 
+test_that("as_da_summary returns compact explicit summaries", {
+  da <- da_report_fixture()
+  before <- as_da_results(da)
+  summary <- as_da_summary(da, alpha = 0.05)
+
+  expect_s3_class(summary, "data.frame")
+  expect_named(summary, da_expected_summary_columns())
+  expect_equal(nrow(summary), 1L)
+  expect_equal(summary$method, "aldex2")
+  expect_equal(summary$contrast, "A_vs_B")
+  expect_equal(summary$group1, "A")
+  expect_equal(summary$group2, "B")
+  expect_equal(summary$tested_features, 4L)
+  expect_equal(summary$n_p_value, 3L)
+  expect_equal(summary$n_p_adjusted, 3L)
+  expect_equal(summary$n_p_adjusted_le_alpha, 2L)
+  expect_equal(summary$min_p_adjusted, 0.01)
+  expect_equal(summary$top_feature_id, "ASV3")
+  expect_equal(summary$top_taxon_label, "Genus3")
+  expect_equal(summary$top_effect, 3.1)
+  expect_equal(summary$top_p_adjusted, 0.01)
+  expect_equal(summary$p_adjust_method, "aldex2_native_BH")
+  expect_equal(summary$p_adjust_scope, "method_contrast")
+  expect_equal(as_da_results(da), before)
+})
+
+test_that("as_da_summary alpha threshold affects adjusted-p counts", {
+  da <- da_report_fixture()
+  summary_005 <- as_da_summary(da, alpha = 0.05)
+  summary_002 <- as_da_summary(da, alpha = 0.02)
+
+  expect_equal(summary_005$n_p_adjusted_le_alpha, 2L)
+  expect_equal(summary_002$n_p_adjusted_le_alpha, 1L)
+})
+
+test_that("as_da_summary returns one row per pairwise contrast", {
+  da <- da_report_fixture(pairwise = TRUE)
+  summary <- as_da_summary(da)
+
+  expect_s3_class(summary, "data.frame")
+  expect_named(summary, da_expected_summary_columns())
+  expect_equal(nrow(summary), 2L)
+  expect_equal(summary$contrast, c("A_vs_B", "A_vs_C"))
+  expect_equal(summary$tested_features, c(2L, 2L))
+  expect_equal(summary$group1, c("A", "A"))
+  expect_equal(summary$group2, c("B", "C"))
+})
+
+test_that("as_da_summary handles missing adjusted p-values", {
+  da <- da_report_fixture()
+  da$results$p_adjusted <- NA_real_
+
+  summary <- as_da_summary(da)
+
+  expect_equal(summary$n_p_adjusted, 0L)
+  expect_equal(summary$n_p_adjusted_le_alpha, 0L)
+  expect_true(is.na(summary$min_p_adjusted))
+  expect_true(is.na(summary$top_feature_id))
+  expect_true(is.na(summary$top_taxon_label))
+  expect_true(is.na(summary$top_effect))
+  expect_true(is.na(summary$top_p_adjusted))
+})
+
+test_that("as_da_summary collapses multiple adjustment labels", {
+  da <- da_report_fixture()
+  da$results$p_adjust_method <- c("native", "native", "custom", NA)
+  da$results$p_adjust_scope <- c("method", "contrast", "method", NA)
+
+  summary <- as_da_summary(da)
+
+  expect_equal(summary$p_adjust_method, "native; custom")
+  expect_equal(summary$p_adjust_scope, "method; contrast")
+})
+
+test_that("as_da_summary validates inputs clearly", {
+  da <- da_report_fixture()
+
+  expect_error(as_da_summary(list()), "microeda_da")
+  expect_error(as_da_summary(da, alpha = -0.1), "alpha")
+  expect_error(as_da_summary(da, alpha = 1.1), "alpha")
+  expect_error(as_da_summary(da, alpha = c(0.01, 0.05)), "alpha")
+})
+
+test_that("as_da_summary works for real explicit and pairwise DA objects", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_example_counts()
+  metadata <- da_aldex2_example_metadata(rownames(counts))
+  da_explicit <- microeda_da(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+  explicit_before <- as_da_results(da_explicit)
+  explicit_summary <- as_da_summary(da_explicit)
+
+  expect_named(explicit_summary, da_expected_summary_columns())
+  expect_equal(nrow(explicit_summary), 1L)
+  expect_equal(explicit_summary$contrast, "A_vs_B")
+  expect_equal(explicit_summary$tested_features, ncol(counts))
+  expect_equal(as_da_results(da_explicit), explicit_before)
+
+  pairwise_counts <- da_aldex2_pairwise_counts()
+  pairwise_metadata <- da_aldex2_pairwise_metadata(rownames(pairwise_counts))
+  da_pairwise <- microeda_da(
+    pairwise_counts,
+    metadata = pairwise_metadata,
+    group = "group",
+    contrast = "pairwise",
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    mc.samples = 16
+  )
+  pairwise_summary <- as_da_summary(da_pairwise)
+
+  expect_named(pairwise_summary, da_expected_summary_columns())
+  expect_equal(nrow(pairwise_summary), 3L)
+  expect_equal(pairwise_summary$contrast, c("A_vs_B", "A_vs_C", "B_vs_C"))
+  expect_equal(pairwise_summary$tested_features, rep(ncol(pairwise_counts), 3L))
+})
+
+test_that("as_da_summary uses standardized results without raw output", {
+  da <- da_report_fixture()
+  before <- as_da_results(da)
+  da$raw_outputs <- list(aldex2 = list(raw_outputs = "do not serialize"))
+
+  summary <- as_da_summary(da)
+
+  expect_s3_class(summary, "data.frame")
+  expect_false(any(grepl("raw_outputs", unlist(summary), fixed = TRUE)))
+  expect_equal(as_da_results(da), before)
+})
+
 test_that("microeda_da_report returns compact character output", {
   da <- da_report_fixture()
   report <- microeda_da_report(da, top_n = 3, alpha = 0.05, digits = 3)
@@ -1491,6 +1648,7 @@ test_that("DA public exports are limited and backend dependencies stay optional"
   exports <- getNamespaceExports("microeda")
   expect_true("microeda_da" %in% exports)
   expect_true("as_da_results" %in% exports)
+  expect_true("as_da_summary" %in% exports)
   expect_true("microeda_da_report" %in% exports)
   expect_true("write_da_results" %in% exports)
   expect_false(any(c(
@@ -1509,7 +1667,9 @@ test_that("DA public exports are limited and backend dependencies stay optional"
     "da_standardize_aldex2_result",
     "da_report_contrast_summary",
     "da_report_top_rows",
-    "da_report_table_lines"
+    "da_report_table_lines",
+    "da_summary_from_results",
+    "da_summary_row"
   ) %in% exports))
 
   description <- utils::packageDescription("microeda")
@@ -1524,6 +1684,7 @@ test_that("DA public exports are limited and backend dependencies stay optional"
   da_function_names <- c(
     "microeda_da",
     "as_da_results",
+    "as_da_summary",
     "microeda_da_report",
     "write_da_results",
     "da_prepare_context",
