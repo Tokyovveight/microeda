@@ -1048,7 +1048,31 @@ test_that("as_da_results validates input", {
   )
 })
 
-test_that("print.microeda_da is compact and points to DA outputs", {
+test_that("print.microeda_da is compact and points to DA helpers", {
+  da_explicit <- da_report_fixture()
+  explicit_before <- as_da_results(da_explicit)
+  explicit_output <- capture.output(
+    explicit_visible <- withVisible(print(da_explicit))
+  )
+
+  expect_identical(explicit_visible$value, da_explicit)
+  expect_false(explicit_visible$visible)
+  expect_true(any(grepl("<microeda_da>", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("Methods:", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("Group:", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("Contrast:", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("Result rows:", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("Caveats:", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("as_da_results(x)", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("as_da_summary(x)", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("microeda_da_report(x)", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("write_da_results(x, file)", explicit_output, fixed = TRUE)))
+  expect_true(any(grepl("x$raw_outputs", explicit_output, fixed = TRUE)))
+  expect_false(any(grepl("ASV1", explicit_output, fixed = TRUE)))
+  expect_equal(as_da_results(da_explicit), explicit_before)
+})
+
+test_that("print.microeda_da works for pairwise DA objects", {
   skip_if_not_installed("ALDEx2")
 
   counts <- da_aldex2_pairwise_counts()
@@ -1062,19 +1086,25 @@ test_that("print.microeda_da is compact and points to DA outputs", {
     taxa_are_rows = FALSE,
     mc.samples = 16
   )
+  before <- as_da_results(da)
 
-  output <- capture.output(returned <- print(da))
+  output <- capture.output(visible_result <- withVisible(print(da)))
 
-  expect_identical(returned, da)
+  expect_identical(visible_result$value, da)
+  expect_false(visible_result$visible)
   expect_true(any(grepl("<microeda_da>", output, fixed = TRUE)))
   expect_true(any(grepl("Methods:", output, fixed = TRUE)))
   expect_true(any(grepl("Group:", output, fixed = TRUE)))
   expect_true(any(grepl("Contrasts:", output, fixed = TRUE)))
   expect_true(any(grepl("Result rows:", output, fixed = TRUE)))
   expect_true(any(grepl("Caveats:", output, fixed = TRUE)))
-  expect_true(any(grepl("as_da_results", output, fixed = TRUE)))
-  expect_true(any(grepl("raw_outputs", output, fixed = TRUE)))
+  expect_true(any(grepl("as_da_results(x)", output, fixed = TRUE)))
+  expect_true(any(grepl("as_da_summary(x)", output, fixed = TRUE)))
+  expect_true(any(grepl("microeda_da_report(x)", output, fixed = TRUE)))
+  expect_true(any(grepl("write_da_results(x, file)", output, fixed = TRUE)))
+  expect_true(any(grepl("x$raw_outputs", output, fixed = TRUE)))
   expect_false(any(grepl("ASV1", output, fixed = TRUE)))
+  expect_equal(as_da_results(da), before)
 })
 
 test_that("as_da_summary returns compact explicit summaries", {

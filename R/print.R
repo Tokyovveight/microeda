@@ -380,6 +380,9 @@ print.microeda_da <- function(x, ...) {
   cat("\n")
 
   cat("\nUse as_da_results(x) for standardized results.\n")
+  cat("Use as_da_summary(x) for a compact per-contrast summary.\n")
+  cat("Use microeda_da_report(x) for a readable text report.\n")
+  cat("Use write_da_results(x, file) to export standardized results to CSV.\n")
   cat("Raw backend outputs are available in x$raw_outputs.\n")
   invisible(x)
 }

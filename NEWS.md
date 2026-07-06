@@ -49,6 +49,8 @@
   `microeda_da` results.
 * Added `write_da_results()` as a CSV export helper for standardized
   `microeda_da` results.
+* Improved `microeda_da` print hints for DA summary, report, and CSV export
+  helpers.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.
