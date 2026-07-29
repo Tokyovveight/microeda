@@ -18,7 +18,8 @@ microeda_da(
   taxa_are_rows = TRUE,
   mc.samples = 128,
   denom = "all",
-  paired.test = FALSE
+  paired.test = FALSE,
+  pair_id = NULL
 )
 }
 \arguments{
@@ -55,6 +56,11 @@ rows.}
 \item{denom}{Denominator strategy passed to \code{ALDEx2::aldex.clr()}.}
 
 \item{paired.test}{Logical passed to ALDEx2 test/effect helpers.}
+
+\item{pair_id}{Optional metadata column identifying matched sample pairs.
+Required when \code{paired.test = TRUE} and rejected otherwise. Within every
+analyzed contrast, each pair must contain exactly one \code{group1} sample and
+one \code{group2} sample.}
 }
 \value{
 A \code{microeda_da} object containing standardized results, method
@@ -70,6 +76,18 @@ backend output in the returned object.
 This helper is exploratory: it uses method-native p-value adjustment, does
 not globally re-adjust backend outputs, does not rank methods, and does not
 claim ground-truth differentially abundant taxa.
+
+For ALDEx2 results, \code{effect} retains the native ALDEx2 effect size. microeda
+supplies deterministic internal condition labels so the between-group
+difference is \code{group2 - group1}: positive values indicate higher CLR
+abundance in \code{group2}, and negative values indicate higher CLR abundance in
+\code{group1}.
+
+For paired analyses, samples are matched by \code{pair_id} separately within
+every contrast. Pairs are ordered deterministically by their character
+labels, with the \code{group1} and \code{group2} sample blocks passed to ALDEx2 in the
+same pair order. Incomplete or ambiguous pairs cause an error; samples are
+never removed silently.
 }
 \examples{
 counts <- matrix(

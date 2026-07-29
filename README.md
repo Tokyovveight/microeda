@@ -278,6 +278,27 @@ if (requireNamespace("ALDEx2", quietly = TRUE)) {
 This workflow does not rank methods or claim ground-truth differentially
 abundant taxa. ANCOM-BC2 and DESeq2 are planned as later optional backends.
 
+For matched samples, identify pairs explicitly. microeda validates each
+contrast independently and never infers pairs from sample order. Native ALDEx2
+effect values are oriented as `group2 - group1`.
+
+```r
+metadata_paired <- metadata
+metadata_paired$pair_id <- c("P1", "P2", "P1", "P2")
+
+if (requireNamespace("ALDEx2", quietly = TRUE)) {
+  da_paired <- microeda_da(
+    counts,
+    metadata = metadata_paired,
+    group = "group",
+    contrast = c("A", "B"),
+    taxa_are_rows = FALSE,
+    paired.test = TRUE,
+    pair_id = "pair_id"
+  )
+}
+```
+
 ## Plots And Ordinations
 
 The current plotting helpers use base R.

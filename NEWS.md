@@ -51,6 +51,9 @@
   `microeda_da` results.
 * Improved `microeda_da` print hints for DA summary, report, and CSV export
   helpers.
+* Stabilized paired ALDEx2 analyses with explicit `pair_id` matching,
+  deterministic group2-minus-group1 effect orientation, and contrast-specific
+  small-group caveats.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.

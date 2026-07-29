@@ -29,6 +29,23 @@
 #' @param mc.samples Number of Monte Carlo samples passed to ALDEx2.
 #' @param denom Denominator strategy passed to `ALDEx2::aldex.clr()`.
 #' @param paired.test Logical passed to ALDEx2 test/effect helpers.
+#' @param pair_id Optional metadata column identifying matched sample pairs.
+#'   Required when `paired.test = TRUE` and rejected otherwise. Within every
+#'   analyzed contrast, each pair must contain exactly one `group1` sample and
+#'   one `group2` sample.
+#'
+#' @details
+#' For ALDEx2 results, `effect` retains the native ALDEx2 effect size. microeda
+#' supplies deterministic internal condition labels so the between-group
+#' difference is `group2 - group1`: positive values indicate higher CLR
+#' abundance in `group2`, and negative values indicate higher CLR abundance in
+#' `group1`.
+#'
+#' For paired analyses, samples are matched by `pair_id` separately within
+#' every contrast. Pairs are ordered deterministically by their character
+#' labels, with the `group1` and `group2` sample blocks passed to ALDEx2 in the
+#' same pair order. Incomplete or ambiguous pairs cause an error; samples are
+#' never removed silently.
 #'
 #' @return A `microeda_da` object containing standardized results, method
 #'   results, preserved raw backend outputs, caveats, and parameters.
@@ -77,7 +94,8 @@ microeda_da <- function(x,
                         taxa_are_rows = TRUE,
                         mc.samples = 128,
                         denom = "all",
-                        paired.test = FALSE) {
+                        paired.test = FALSE,
+                        pair_id = NULL) {
   methods <- da_validate_methods(methods)
   unsupported <- setdiff(methods, "aldex2")
   if (length(unsupported) > 0) {
@@ -88,6 +106,10 @@ microeda_da <- function(x,
       call. = FALSE
     )
   }
+  pair_id <- da_validate_pair_id_argument(
+    pair_id = pair_id,
+    paired.test = paired.test
+  )
 
   context <- da_prepare_context(
     x = x,
@@ -100,7 +122,8 @@ microeda_da <- function(x,
     prevalence_filter = prevalence_filter,
     min_count = min_count,
     p_adjust_method = p_adjust_method,
-    taxa_are_rows = taxa_are_rows
+    taxa_are_rows = taxa_are_rows,
+    pair_id = pair_id
   )
   backend <- da_run_aldex2(
     context,
@@ -416,7 +439,8 @@ da_prepare_context <- function(x,
                                prevalence_filter = NULL,
                                min_count = NULL,
                                p_adjust_method = NULL,
-                               taxa_are_rows = TRUE) {
+                               taxa_are_rows = TRUE,
+                               pair_id = NULL) {
   if (missing(group)) {
     stop("`group` is required.", call. = FALSE)
   }
@@ -436,6 +460,7 @@ da_prepare_context <- function(x,
 
   da_validate_counts(counts)
   group <- da_validate_group(metadata, group)
+  pair_id <- da_validate_pair_id_column(metadata, pair_id)
   group_values <- metadata[[group]]
   names(group_values) <- rownames(metadata)
   contrast_plan <- da_validate_contrast(
@@ -460,6 +485,7 @@ da_prepare_context <- function(x,
       metadata = metadata,
       taxonomy = taxonomy,
       group = group,
+      pair_id = pair_id,
       contrast = contrast,
       contrast_plan = contrast_plan,
       contrast_label = contrast_label,
@@ -473,6 +499,7 @@ da_prepare_context <- function(x,
       caveats = da_context_caveats(
         counts = counts,
         group_values = group_values,
+        contrast_plan = contrast_plan,
         methods = methods,
         tax_rank = tax_rank,
         taxonomy = taxonomy
@@ -480,6 +507,7 @@ da_prepare_context <- function(x,
       params = list(
         methods = methods,
         contrast_plan = contrast_plan,
+        pair_id = pair_id,
         tax_rank = tax_rank,
         filters = filters,
         p_adjust_method = p_adjust_method,
@@ -711,7 +739,8 @@ da_run_aldex2 <- function(context,
   params <- da_validate_aldex2_params(
     mc.samples = mc.samples,
     denom = denom,
-    paired.test = paired.test
+    paired.test = paired.test,
+    pair_id = context$pair_id
   )
 
   if (nrow(context$contrast_plan) == 1 &&
@@ -767,19 +796,12 @@ da_run_aldex2 <- function(context,
 }
 
 da_run_aldex2_contrast <- function(context, contrast_row, params) {
-  group_values <- as.character(context$group_values)
-  sample_ids <- names(context$group_values)
-  group1 <- contrast_row$group1
-  group2 <- contrast_row$group2
-  keep <- group_values %in% c(group1, group2)
-  selected_samples <- sample_ids[keep]
-  conditions <- group_values[keep]
-
-  if (!all(c(group1, group2) %in% conditions)) {
-    stop("Both contrast groups must have samples for ALDEx2.", call. = FALSE)
-  }
-
-  conditions <- factor(conditions, levels = c(group1, group2))
+  sample_plan <- da_aldex2_sample_plan(
+    context = context,
+    contrast_row = contrast_row,
+    params = params
+  )
+  selected_samples <- sample_plan$sample_order
   reads <- t(context$counts[selected_samples, , drop = FALSE])
   warnings <- character()
   messages <- character()
@@ -792,7 +814,7 @@ da_run_aldex2_contrast <- function(context, contrast_row, params) {
       {
         clr <- ALDEx2::aldex.clr(
           reads,
-          as.character(conditions),
+          sample_plan$backend_conditions,
           mc.samples = params$mc.samples,
           denom = params$denom,
           verbose = FALSE
@@ -834,7 +856,12 @@ da_run_aldex2_contrast <- function(context, contrast_row, params) {
     ttest = ttest,
     effect = effect,
     combined = combined,
-    conditions = as.character(conditions),
+    conditions = sample_plan$conditions,
+    backend_conditions = sample_plan$backend_conditions,
+    condition_mapping = sample_plan$condition_mapping,
+    sample_order = sample_plan$sample_order,
+    pair_id = params$pair_id,
+    pairing = sample_plan$pairing,
     contrast_row = contrast_row,
     input_orientation = "feature_by_sample",
     transposed_from_context = TRUE,
@@ -849,6 +876,151 @@ da_run_aldex2_contrast <- function(context, contrast_row, params) {
     raw_output = raw_output,
     notes = da_method_notes("aldex2"),
     params = params
+  )
+}
+
+da_aldex2_sample_plan <- function(context, contrast_row, params) {
+  group_values <- as.character(context$group_values)
+  sample_ids <- names(context$group_values)
+  group1 <- contrast_row$group1
+  group2 <- contrast_row$group2
+  keep <- group_values %in% c(group1, group2)
+  selected_samples <- sample_ids[keep]
+  conditions <- group_values[keep]
+
+  if (!all(c(group1, group2) %in% conditions)) {
+    stop("Both contrast groups must have samples for ALDEx2.", call. = FALSE)
+  }
+
+  pairing <- NULL
+  if (isTRUE(params$paired.test)) {
+    pairing <- da_aldex2_pairing_plan(
+      context = context,
+      contrast_row = contrast_row,
+      pair_id = params$pair_id
+    )
+    selected_samples <- c(
+      pairing$group1_sample_id,
+      pairing$group2_sample_id
+    )
+    conditions <- c(
+      rep(group1, nrow(pairing)),
+      rep(group2, nrow(pairing))
+    )
+  }
+
+  backend_conditions <- ifelse(
+    conditions == group1,
+    "microeda_group1",
+    "microeda_group2"
+  )
+
+  list(
+    sample_order = selected_samples,
+    conditions = conditions,
+    backend_conditions = backend_conditions,
+    condition_mapping = data.frame(
+      backend_condition = c("microeda_group1", "microeda_group2"),
+      group = c(group1, group2),
+      stringsAsFactors = FALSE
+    ),
+    pairing = pairing
+  )
+}
+
+da_aldex2_pairing_plan <- function(context, contrast_row, pair_id) {
+  group_values <- as.character(context$group_values)
+  sample_ids <- names(context$group_values)
+  group1 <- contrast_row$group1
+  group2 <- contrast_row$group2
+  contrast_label <- contrast_row$contrast
+  keep <- group_values %in% c(group1, group2)
+  selected_samples <- sample_ids[keep]
+  selected_groups <- group_values[keep]
+  pair_values <- context$metadata[selected_samples, pair_id, drop = TRUE]
+  pair_labels <- as.character(pair_values)
+  missing_pair <- is.na(pair_values) |
+    is.na(pair_labels) |
+    !nzchar(trimws(pair_labels))
+
+  if (any(missing_pair)) {
+    stop(
+      "`pair_id` column `",
+      pair_id,
+      "` contains missing or empty values for contrast `",
+      contrast_label,
+      "` in sample(s): ",
+      paste(selected_samples[missing_pair], collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  pair_order <- sort(unique(pair_labels), method = "radix")
+  pair_counts <- lapply(pair_order, function(pair_label) {
+    in_pair <- pair_labels == pair_label
+    c(
+      group1 = sum(selected_groups[in_pair] == group1),
+      group2 = sum(selected_groups[in_pair] == group2),
+      total = sum(in_pair)
+    )
+  })
+  invalid <- vapply(pair_counts, function(counts) {
+    counts[["group1"]] != 1L ||
+      counts[["group2"]] != 1L ||
+      counts[["total"]] != 2L
+  }, logical(1))
+
+  if (any(invalid)) {
+    invalid_details <- vapply(which(invalid), function(i) {
+      counts <- pair_counts[[i]]
+      paste0(
+        pair_order[i],
+        " (",
+        group1,
+        "=",
+        counts[["group1"]],
+        ", ",
+        group2,
+        "=",
+        counts[["group2"]],
+        ", total=",
+        counts[["total"]],
+        ")"
+      )
+    }, character(1))
+    stop(
+      "Invalid paired samples for contrast `",
+      contrast_label,
+      "` in `",
+      pair_id,
+      "`: each pair must contain exactly one `",
+      group1,
+      "` sample and one `",
+      group2,
+      "` sample. Invalid pair(s): ",
+      paste(invalid_details, collapse = "; "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  group1_samples <- vapply(pair_order, function(pair_label) {
+    selected_samples[
+      pair_labels == pair_label & selected_groups == group1
+    ]
+  }, character(1))
+  group2_samples <- vapply(pair_order, function(pair_label) {
+    selected_samples[
+      pair_labels == pair_label & selected_groups == group2
+    ]
+  }, character(1))
+
+  data.frame(
+    pair_id = pair_order,
+    group1_sample_id = unname(group1_samples),
+    group2_sample_id = unname(group2_samples),
+    stringsAsFactors = FALSE
   )
 }
 
@@ -1113,6 +1285,57 @@ da_validate_group <- function(metadata, group) {
   group
 }
 
+da_validate_pair_id_argument <- function(pair_id, paired.test) {
+  if (!is.logical(paired.test) || length(paired.test) != 1 ||
+      is.na(paired.test)) {
+    stop("`paired.test` must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  if (isTRUE(paired.test)) {
+    if (is.null(pair_id)) {
+      stop(
+        "`pair_id` must name a metadata column when `paired.test = TRUE`.",
+        call. = FALSE
+      )
+    }
+  } else if (!is.null(pair_id)) {
+    stop(
+      "`pair_id` can only be supplied when `paired.test = TRUE`.",
+      call. = FALSE
+    )
+  }
+
+  if (!is.null(pair_id) &&
+      (!is.character(pair_id) || length(pair_id) != 1 ||
+       is.na(pair_id) || !nzchar(pair_id))) {
+    stop("`pair_id` must be NULL or a single non-empty character string.", call. = FALSE)
+  }
+
+  pair_id
+}
+
+da_validate_pair_id_column <- function(metadata, pair_id) {
+  if (is.null(pair_id)) {
+    return(NULL)
+  }
+
+  if (!is.character(pair_id) || length(pair_id) != 1 ||
+      is.na(pair_id) || !nzchar(pair_id)) {
+    stop("`pair_id` must be NULL or a single non-empty character string.", call. = FALSE)
+  }
+
+  if (!pair_id %in% colnames(metadata)) {
+    stop(
+      "`pair_id` column `",
+      pair_id,
+      "` is not present in `metadata`.",
+      call. = FALSE
+    )
+  }
+
+  pair_id
+}
+
 da_validate_tax_rank <- function(tax_rank, taxonomy) {
   if (is.null(tax_rank)) {
     return(NULL)
@@ -1168,7 +1391,10 @@ da_validate_p_adjust_method <- function(p_adjust_method) {
   p_adjust_method
 }
 
-da_validate_aldex2_params <- function(mc.samples, denom, paired.test) {
+da_validate_aldex2_params <- function(mc.samples,
+                                      denom,
+                                      paired.test,
+                                      pair_id = NULL) {
   if (!is.numeric(mc.samples) || length(mc.samples) != 1 ||
       is.na(mc.samples) || !is.finite(mc.samples) ||
       mc.samples < 1 || mc.samples != floor(mc.samples)) {
@@ -1180,15 +1406,13 @@ da_validate_aldex2_params <- function(mc.samples, denom, paired.test) {
     stop("`denom` must be a single non-empty character string.", call. = FALSE)
   }
 
-  if (!is.logical(paired.test) || length(paired.test) != 1 ||
-      is.na(paired.test)) {
-    stop("`paired.test` must be TRUE or FALSE.", call. = FALSE)
-  }
+  pair_id <- da_validate_pair_id_argument(pair_id, paired.test)
 
   list(
     mc.samples = as.integer(mc.samples),
     denom = denom,
-    paired.test = paired.test
+    paired.test = paired.test,
+    pair_id = pair_id
   )
 }
 
@@ -1220,7 +1444,12 @@ da_optional_package_available <- function(package) {
   requireNamespace(package, quietly = TRUE)
 }
 
-da_context_caveats <- function(counts, group_values, methods, tax_rank, taxonomy) {
+da_context_caveats <- function(counts,
+                               group_values,
+                               contrast_plan,
+                               methods,
+                               tax_rank,
+                               taxonomy) {
   rows <- list(da_caveat(
     method = NA_character_,
     caveat_id = "method_native_p_adjustment",
@@ -1232,17 +1461,14 @@ da_context_caveats <- function(counts, group_values, methods, tax_rank, taxonomy
     )
   ))
 
-  group_sizes <- table(as.character(group_values))
-  if (min(group_sizes) < 5) {
-    rows[[length(rows) + 1L]] <- da_caveat(
-      method = NA_character_,
-      caveat_id = "small_group_size",
-      topic = "group_design",
-      severity = "warning",
-      message = paste(
-        "At least one contrast group has fewer than five samples;",
-        "DA results may be unstable."
-      )
+  small_group_caveats <- da_small_group_caveats(
+    group_values = group_values,
+    contrast_plan = contrast_plan
+  )
+  if (nrow(small_group_caveats) > 0) {
+    rows <- c(
+      rows,
+      split(small_group_caveats, seq_len(nrow(small_group_caveats)))
     )
   }
 
@@ -1282,6 +1508,49 @@ da_context_caveats <- function(counts, group_values, methods, tax_rank, taxonomy
   out
 }
 
+da_small_group_caveats <- function(group_values, contrast_plan) {
+  rows <- lapply(seq_len(nrow(contrast_plan)), function(i) {
+    contrast_row <- contrast_plan[i, , drop = FALSE]
+    group1 <- contrast_row$group1
+    group2 <- contrast_row$group2
+    group_labels <- as.character(group_values)
+    group1_n <- sum(group_labels == group1)
+    group2_n <- sum(group_labels == group2)
+
+    if (min(group1_n, group2_n) >= 5) {
+      return(NULL)
+    }
+
+    da_caveat(
+      method = NA_character_,
+      caveat_id = "small_group_size",
+      topic = "group_design",
+      severity = "warning",
+      message = paste0(
+        "Contrast ",
+        contrast_row$contrast,
+        " has a group with fewer than five samples (",
+        group1,
+        "=",
+        group1_n,
+        "; ",
+        group2,
+        "=",
+        group2_n,
+        "); DA results may be unstable."
+      )
+    )
+  })
+  rows <- Filter(Negate(is.null), rows)
+  if (length(rows) == 0) {
+    return(da_empty_caveats())
+  }
+
+  out <- do.call(rbind, rows)
+  row.names(out) <- NULL
+  out
+}
+
 da_method_note <- function(method) {
   if (identical(method, "aldex2")) {
     return(da_caveat(
@@ -1291,7 +1560,9 @@ da_method_note <- function(method) {
       severity = "info",
       message = paste(
         "ALDEx2 is treated as a compositional-aware method;",
-        "interpret results with its Monte Carlo Dirichlet assumptions."
+        "interpret results with its Monte Carlo Dirichlet assumptions.",
+        "Its native effect is oriented as group2 minus group1:",
+        "positive values favor group2 and negative values favor group1."
       )
     ))
   }

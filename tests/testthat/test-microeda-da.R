@@ -192,10 +192,12 @@ da_aldex2_example_counts <- function() {
 }
 
 da_aldex2_example_metadata <- function(sample_ids = paste0("S", seq_len(6))) {
-  data.frame(
+  metadata <- data.frame(
     group = c("A", "A", "A", "B", "B", "B"),
-    row.names = sample_ids
+    pair = rep(paste0("p", seq_len(3)), 2),
+    row.names = paste0("S", seq_len(6))
   )
+  metadata[sample_ids, , drop = FALSE]
 }
 
 da_aldex2_pairwise_counts <- function() {
@@ -220,10 +222,35 @@ da_aldex2_pairwise_counts <- function() {
 }
 
 da_aldex2_pairwise_metadata <- function(sample_ids = paste0("S", seq_len(9))) {
-  data.frame(
+  metadata <- data.frame(
     group = c("A", "A", "A", "B", "B", "B", "C", "C", "C"),
-    row.names = sample_ids
+    pair = rep(paste0("p", seq_len(3)), 3),
+    row.names = paste0("S", seq_len(9))
   )
+  metadata[sample_ids, , drop = FALSE]
+}
+
+da_aldex2_direction_counts <- function() {
+  counts <- t(rbind(
+    F_target = c(10, 12, 9, 11, 120, 130, 115, 125),
+    F_ref1 = c(100, 98, 102, 101, 65, 62, 68, 64),
+    F_ref2 = c(95, 100, 97, 99, 60, 63, 59, 61),
+    F_ref3 = c(105, 102, 104, 103, 66, 65, 67, 64)
+  ))
+  rownames(counts) <- c(paste0("A", seq_len(4)), paste0("B", seq_len(4)))
+  counts
+}
+
+da_aldex2_direction_metadata <- function(sample_ids = NULL) {
+  metadata <- data.frame(
+    group = c(rep("A", 4), rep("B", 4)),
+    pair = rep(paste0("p", seq_len(4)), 2),
+    row.names = c(paste0("A", seq_len(4)), paste0("B", seq_len(4)))
+  )
+  if (is.null(sample_ids)) {
+    return(metadata)
+  }
+  metadata[sample_ids, , drop = FALSE]
 }
 
 test_that("da_prepare_context accepts matrix and data frame inputs", {
@@ -480,6 +507,7 @@ test_that("da_prepare_context returns expected internal fields", {
       "metadata",
       "taxonomy",
       "group",
+      "pair_id",
       "contrast",
       "contrast_plan",
       "contrast_label",
@@ -496,7 +524,9 @@ test_that("da_prepare_context returns expected internal fields", {
     )
   )
   expect_null(context$p_adjust_method)
+  expect_null(context$pair_id)
   expect_null(context$params$p_adjust_method)
+  expect_null(context$params$pair_id)
   expect_true("method_native_p_adjustment" %in% context$caveats$caveat_id)
   adjustment_note <- context$caveats[
     context$caveats$caveat_id == "method_native_p_adjustment",
@@ -541,6 +571,58 @@ test_that("da_prepare_context records input caveats without requiring backends",
   expect_true("high_sparsity" %in% context$caveats$caveat_id)
   expect_true("non_integer_counts" %in% context$caveats$caveat_id)
   expect_true("taxonomy_unavailable" %in% context$caveats$caveat_id)
+})
+
+test_that("small-group caveats use only groups in each contrast", {
+  counts <- matrix(
+    10,
+    nrow = 15,
+    ncol = 3,
+    dimnames = list(paste0("S", seq_len(15)), paste0("ASV", seq_len(3)))
+  )
+  metadata <- data.frame(
+    group = c(rep("A", 5), rep("B", 5), rep("C", 5)),
+    row.names = rownames(counts)
+  )
+  metadata$group[15] <- "D"
+
+  explicit <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE
+  )
+  explicit_small <- explicit$caveats[
+    explicit$caveats$caveat_id == "small_group_size",
+    ,
+    drop = FALSE
+  ]
+
+  expect_equal(nrow(explicit_small), 0L)
+
+  pairwise <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = "pairwise",
+    methods = "aldex2",
+    taxa_are_rows = FALSE
+  )
+  pairwise_small <- pairwise$caveats[
+    pairwise$caveats$caveat_id == "small_group_size",
+    ,
+    drop = FALSE
+  ]
+
+  expect_equal(nrow(pairwise_small), 5L)
+  expect_false(any(grepl("A_vs_B", pairwise_small$message, fixed = TRUE)))
+  expect_true(any(grepl("A_vs_C", pairwise_small$message, fixed = TRUE)))
+  expect_true(any(grepl("A_vs_D", pairwise_small$message, fixed = TRUE)))
+  expect_true(any(grepl("B_vs_C", pairwise_small$message, fixed = TRUE)))
+  expect_true(any(grepl("B_vs_D", pairwise_small$message, fixed = TRUE)))
+  expect_true(any(grepl("C_vs_D", pairwise_small$message, fixed = TRUE)))
 })
 
 test_that("standardized DA empty result has stable columns", {
@@ -747,6 +829,237 @@ test_that("da_run_aldex2 reports missing optional ALDEx2 clearly", {
   )
 })
 
+test_that("microeda_da requires pair_id only for paired tests", {
+  counts <- da_aldex2_example_counts()
+  metadata <- da_aldex2_example_metadata(rownames(counts))
+
+  expect_error(
+    microeda_da(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = c("A", "B"),
+      taxa_are_rows = FALSE,
+      paired.test = TRUE
+    ),
+    "`pair_id` must name a metadata column",
+    fixed = TRUE
+  )
+  expect_error(
+    microeda_da(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = c("A", "B"),
+      taxa_are_rows = FALSE,
+      pair_id = "pair"
+    ),
+    "`pair_id` can only be supplied",
+    fixed = TRUE
+  )
+  expect_error(
+    microeda_da(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = c("A", "B"),
+      taxa_are_rows = FALSE,
+      paired.test = TRUE,
+      pair_id = "missing_pair"
+    ),
+    "`pair_id` column `missing_pair` is not present",
+    fixed = TRUE
+  )
+})
+
+test_that("paired ALDEx2 rejects missing, incomplete, and ambiguous pairs", {
+  counts <- da_aldex2_example_counts()
+  metadata <- da_aldex2_example_metadata(rownames(counts))
+
+  expect_pairing_error <- function(metadata, pattern) {
+    context <- microeda:::da_prepare_context(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = c("A", "B"),
+      methods = "aldex2",
+      taxa_are_rows = FALSE,
+      pair_id = "pair"
+    )
+    testthat::local_mocked_bindings(
+      da_optional_package_available = function(package) TRUE,
+      .package = "microeda"
+    )
+    expect_error(
+      microeda:::da_run_aldex2(
+        context,
+        mc.samples = 16,
+        paired.test = TRUE
+      ),
+      pattern
+    )
+  }
+
+  missing_metadata <- metadata
+  missing_metadata$pair[2] <- NA_character_
+  expect_pairing_error(missing_metadata, "missing or empty")
+
+  empty_metadata <- metadata
+  empty_metadata$pair[2] <- ""
+  expect_pairing_error(empty_metadata, "missing or empty")
+
+  incomplete_metadata <- metadata
+  incomplete_metadata$pair <- c("p1", "p2", "p3", "p1", "p2", "p4")
+  expect_pairing_error(incomplete_metadata, "Invalid pair")
+
+  duplicate_metadata <- metadata
+  duplicate_metadata$pair <- c("p1", "p1", "p2", "p1", "p2", "p3")
+  expect_pairing_error(duplicate_metadata, "p1 \\(A=2, B=1")
+})
+
+test_that("paired validation ignores unrelated group levels", {
+  counts <- matrix(
+    seq_len(20),
+    nrow = 5,
+    dimnames = list(
+      c("A2", "C1", "B1", "A1", "B2"),
+      paste0("ASV", seq_len(4))
+    )
+  )
+  metadata <- data.frame(
+    group = c("A", "C", "B", "A", "B"),
+    pair = c("p2", NA, "p1", "p1", "p2"),
+    row.names = rownames(counts)
+  )
+  context <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    pair_id = "pair"
+  )
+  params <- microeda:::da_validate_aldex2_params(
+    mc.samples = 16,
+    denom = "all",
+    paired.test = TRUE,
+    pair_id = "pair"
+  )
+
+  sample_plan <- microeda:::da_aldex2_sample_plan(
+    context,
+    context$contrast_plan[1, , drop = FALSE],
+    params
+  )
+
+  expect_equal(sample_plan$pairing$pair_id, c("p1", "p2"))
+  expect_equal(sample_plan$pairing$group1_sample_id, c("A1", "A2"))
+  expect_equal(sample_plan$pairing$group2_sample_id, c("B1", "B2"))
+  expect_false("C1" %in% sample_plan$sample_order)
+})
+
+test_that("paired ALDEx2 orders shuffled samples by pair_id", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_direction_counts()
+  shuffled <- c("B3", "A1", "B1", "A4", "A2", "B2", "A3", "B4")
+  counts <- counts[shuffled, , drop = FALSE]
+  metadata <- da_aldex2_direction_metadata(shuffled)
+
+  set.seed(20260729)
+  da <- suppressWarnings(microeda_da(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = c("A", "B"),
+    taxa_are_rows = FALSE,
+    mc.samples = 16,
+    paired.test = TRUE,
+    pair_id = "pair"
+  ))
+  raw <- da$raw_outputs$aldex2
+
+  expect_equal(raw$pair_id, "pair")
+  expect_equal(raw$params$pair_id, "pair")
+  expect_equal(raw$pairing$pair_id, paste0("p", seq_len(4)))
+  expect_equal(raw$pairing$group1_sample_id, paste0("A", seq_len(4)))
+  expect_equal(raw$pairing$group2_sample_id, paste0("B", seq_len(4)))
+  expect_equal(
+    raw$sample_order,
+    c(paste0("A", seq_len(4)), paste0("B", seq_len(4)))
+  )
+  expect_equal(
+    raw$conditions,
+    c(rep("A", 4), rep("B", 4))
+  )
+  expect_equal(
+    raw$backend_conditions,
+    c(rep("microeda_group1", 4), rep("microeda_group2", 4))
+  )
+})
+
+test_that("paired ALDEx2 validates each pairwise contrast independently", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_pairwise_counts()
+  metadata <- da_aldex2_pairwise_metadata(rownames(counts))
+
+  set.seed(20260729)
+  da <- suppressWarnings(microeda_da(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = "pairwise",
+    taxa_are_rows = FALSE,
+    mc.samples = 16,
+    paired.test = TRUE,
+    pair_id = "pair"
+  ))
+
+  expected_contrasts <- c("A_vs_B", "A_vs_C", "B_vs_C")
+  expect_equal(unique(da$results$contrast), expected_contrasts)
+  expect_named(da$raw_outputs$aldex2$contrasts, expected_contrasts)
+  for (contrast in expected_contrasts) {
+    raw <- da$raw_outputs$aldex2$contrasts[[contrast]]
+    expect_equal(raw$pair_id, "pair")
+    expect_equal(raw$pairing$pair_id, paste0("p", seq_len(3)))
+  }
+})
+
+test_that("paired pairwise validation does not drop incomplete pairs", {
+  counts <- da_aldex2_pairwise_counts()
+  metadata <- da_aldex2_pairwise_metadata(rownames(counts))
+  c_samples <- which(metadata$group == "C")
+  metadata$pair[c_samples[3]] <- "p4"
+  context <- microeda:::da_prepare_context(
+    counts,
+    metadata = metadata,
+    group = "group",
+    contrast = "pairwise",
+    methods = "aldex2",
+    taxa_are_rows = FALSE,
+    pair_id = "pair"
+  )
+  params <- microeda:::da_validate_aldex2_params(
+    mc.samples = 16,
+    denom = "all",
+    paired.test = TRUE,
+    pair_id = "pair"
+  )
+  contrast_row <- context$contrast_plan[
+    context$contrast_plan$contrast == "A_vs_C",
+    ,
+    drop = FALSE
+  ]
+
+  expect_error(
+    microeda:::da_aldex2_sample_plan(context, contrast_row, params),
+    "Invalid paired samples for contrast `A_vs_C`",
+    fixed = TRUE
+  )
+})
+
 test_that("da_run_aldex2 executes pairwise contrast plans", {
   skip_if_not_installed("ALDEx2")
 
@@ -825,6 +1138,11 @@ test_that("da_run_aldex2 executes pairwise contrast plans", {
         "effect",
         "combined",
         "conditions",
+        "backend_conditions",
+        "condition_mapping",
+        "sample_order",
+        "pair_id",
+        "pairing",
         "contrast_row",
         "input_orientation",
         "transposed_from_context",
@@ -930,6 +1248,55 @@ test_that("da_run_aldex2 returns standardized backend results", {
   expect_true(all(backend$results$significance %in% c("***", "**", "*", "ns", NA)))
 })
 
+test_that("ALDEx2 effect is oriented as group2 minus group1", {
+  skip_if_not_installed("ALDEx2")
+
+  counts <- da_aldex2_direction_counts()
+  metadata <- da_aldex2_direction_metadata()
+  run_contrast <- function(contrast) {
+    set.seed(20260729)
+    suppressWarnings(microeda_da(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = contrast,
+      taxa_are_rows = FALSE,
+      mc.samples = 16
+    ))
+  }
+
+  forward <- run_contrast(c("A", "B"))
+  reverse <- run_contrast(c("B", "A"))
+  forward_row <- forward$results[
+    forward$results$feature_id == "F_target",
+    ,
+    drop = FALSE
+  ]
+  reverse_row <- reverse$results[
+    reverse$results$feature_id == "F_target",
+    ,
+    drop = FALSE
+  ]
+
+  expect_gt(forward_row$effect, 0)
+  expect_lt(reverse_row$effect, 0)
+  expect_equal(forward_row$group1, "A")
+  expect_equal(forward_row$group2, "B")
+  expect_equal(reverse_row$group1, "B")
+  expect_equal(reverse_row$group2, "A")
+  expect_match(forward_row$method_note, "group2 minus group1", fixed = TRUE)
+  expect_true(is.na(forward_row$direction))
+  expect_true(is.na(forward_row$log_fold_change))
+  expect_equal(
+    forward_row$effect,
+    forward$raw_outputs$aldex2$combined["F_target", "effect"]
+  )
+  expect_equal(
+    reverse_row$effect,
+    reverse$raw_outputs$aldex2$combined["F_target", "effect"]
+  )
+})
+
 test_that("da_run_aldex2 preserves raw output and params", {
   skip_if_not_installed("ALDEx2")
 
@@ -959,6 +1326,11 @@ test_that("da_run_aldex2 preserves raw output and params", {
       "effect",
       "combined",
       "conditions",
+      "backend_conditions",
+      "condition_mapping",
+      "sample_order",
+      "pair_id",
+      "pairing",
       "contrast_row",
       "input_orientation",
       "transposed_from_context",
@@ -973,12 +1345,24 @@ test_that("da_run_aldex2 preserves raw output and params", {
   expect_s3_class(backend$raw_output$combined, "data.frame")
   expect_equal(rownames(backend$raw_output$combined), colnames(counts))
   expect_equal(backend$raw_output$conditions, metadata$group)
+  expect_equal(
+    backend$raw_output$backend_conditions,
+    c(rep("microeda_group1", 3), rep("microeda_group2", 3))
+  )
+  expect_equal(
+    backend$raw_output$condition_mapping$group,
+    c("A", "B")
+  )
+  expect_equal(backend$raw_output$sample_order, rownames(counts))
+  expect_null(backend$raw_output$pair_id)
+  expect_null(backend$raw_output$pairing)
   expect_equal(backend$raw_output$contrast_row$contrast, "A_vs_B")
   expect_equal(backend$raw_output$input_orientation, "feature_by_sample")
   expect_true(backend$raw_output$transposed_from_context)
   expect_equal(backend$raw_output$params$mc.samples, 16L)
   expect_equal(backend$raw_output$params$denom, "all")
   expect_false(backend$raw_output$params$paired.test)
+  expect_null(backend$raw_output$params$pair_id)
   expect_equal(backend$params, backend$raw_output$params)
 })
 
