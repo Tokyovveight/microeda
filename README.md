@@ -366,6 +366,43 @@ Raw outputs remain separate. Explicit runs use
 `da$raw_outputs$ancombc2$A_vs_B` and `da$raw_outputs$deseq2$A_vs_B`.
 Each ANCOM-BC2 or DESeq2 contrast contains its complete native explicit result.
 
+Use the comparison helpers to inspect method-specific standardized values next
+to one another without creating a consensus or ranking. Native effects retain
+their different scales, so their magnitudes must not be compared directly.
+
+```r
+comparison <- as_da_comparison(
+  da_multi,
+  contrast = "A_vs_B"
+)
+
+cat(microeda_da_comparison_report(
+  da_multi,
+  contrast = "A_vs_B",
+  alpha = 0.05,
+  max_features = 15
+))
+
+write_da_comparison(
+  da_multi,
+  "da_comparison.csv",
+  contrast = "A_vs_B"
+)
+
+raw_deseq2 <- as_da_raw_output(
+  da_multi,
+  method = "deseq2",
+  contrast = "A_vs_B"
+)
+```
+
+`as_da_results()` retains the long standardized table,
+`as_da_summary()` provides method-by-contrast counts,
+`microeda_da_report()` describes the full DA object, and
+`write_da_results()` exports the long table. `as_da_comparison()` and
+`write_da_comparison()` use only standardized rows; native objects remain
+available through `as_da_raw_output()`.
+
 For matched samples, identify pairs explicitly. microeda validates each
 contrast independently and never infers pairs from sample order. Native ALDEx2
 effect values are oriented as `group2 - group1`. Paired execution currently

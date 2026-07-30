@@ -58,3 +58,6 @@ if (requireNamespace("ALDEx2", quietly = TRUE)) {
 }
 
 }
+\seealso{
+\code{\link[=as_da_results]{as_da_results()}}, \code{\link[=write_da_comparison]{write_da_comparison()}}
+}

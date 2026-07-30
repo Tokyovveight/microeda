@@ -62,3 +62,7 @@ if (requireNamespace("ALDEx2", quietly = TRUE)) {
 }
 
 }
+\seealso{
+\code{\link[=as_da_results]{as_da_results()}}, \code{\link[=as_da_summary]{as_da_summary()}},
+\code{\link[=microeda_da_comparison_report]{microeda_da_comparison_report()}}
+}

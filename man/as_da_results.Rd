@@ -18,3 +18,7 @@ schema.
 \code{microeda_da} object. Raw backend outputs are preserved separately in
 \code{x$raw_outputs}.
 }
+\seealso{
+\code{\link[=as_da_summary]{as_da_summary()}}, \code{\link[=as_da_raw_output]{as_da_raw_output()}}, \code{\link[=as_da_comparison]{as_da_comparison()}},
+\code{\link[=microeda_da_report]{microeda_da_report()}}, \code{\link[=write_da_results]{write_da_results()}}, \code{\link[=write_da_comparison]{write_da_comparison()}}
+}

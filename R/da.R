@@ -261,6 +261,9 @@ microeda_da <- function(x,
 #' @return A data frame with the standardized differential representation
 #'   schema.
 #'
+#' @seealso [as_da_summary()], [as_da_raw_output()], [as_da_comparison()],
+#'   [microeda_da_report()], [write_da_results()], [write_da_comparison()]
+#'
 #' @export
 as_da_results <- function(x) {
   if (!inherits(x, "microeda_da")) {
@@ -284,6 +287,9 @@ as_da_results <- function(x) {
 #' @param alpha Adjusted p-value threshold used for summary counts.
 #'
 #' @return A base `data.frame` with one row per method and contrast.
+#'
+#' @seealso [as_da_results()], [as_da_comparison()],
+#'   [microeda_da_comparison_report()]
 #'
 #' @examples
 #' counts <- matrix(
@@ -345,6 +351,9 @@ as_da_summary <- function(x, alpha = 0.05) {
 #' @param digits Number of digits used for numeric report values.
 #'
 #' @return A single character string suitable for `cat()`.
+#'
+#' @seealso [as_da_results()], [as_da_summary()],
+#'   [microeda_da_comparison_report()]
 #'
 #' @examples
 #' counts <- matrix(
@@ -520,6 +529,8 @@ microeda_da_report <- function(x, top_n = 10, alpha = 0.05, digits = 3) {
 #' @param quote Logical; passed to `utils::write.csv()`.
 #'
 #' @return The output file path, invisibly.
+#'
+#' @seealso [as_da_results()], [write_da_comparison()]
 #'
 #' @examples
 #' counts <- matrix(
