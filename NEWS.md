@@ -58,6 +58,8 @@
   with native natural-log coefficients, q-values, and complete raw output.
 * Added ordered ALDEx2/ANCOM-BC2 multi-method DA workflows and ANCOM-BC2
   pairwise execution through separate explicit primary contrasts.
+* Added an optional DESeq2 sensitivity/comparison backend with explicit and
+  pair-specific fits, native diagnostics, and ordered multi-method execution.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.

@@ -21,10 +21,10 @@ The core idea is deliberately conservative:
 
 PERMANOVA-style beta group testing is available when the optional `vegan`
 package is installed and is reported together with dispersion diagnostics.
-ALDEx2- and ANCOM-BC2-based exploratory differential representation is
-available when the corresponding optional package is installed. The methods
+ALDEx2-, ANCOM-BC2-, and DESeq2-based exploratory differential representation
+is available when the corresponding optional package is installed. The methods
 can be run separately or side-by-side over explicit or pairwise contrasts.
-DESeq2 and formal method ranking are not implemented yet.
+Formal method ranking is not implemented.
 
 ## First Workflow
 
@@ -251,10 +251,10 @@ effective numbers of taxa.
 
 ## Differential Representation
 
-`microeda_da()` exposes ALDEx2- and ANCOM-BC2-backed exploratory differential
-representation workflows. It uses method-native p-value adjustment, returns
-standardized results with `as_da_results()`, and preserves complete native
-backend output in `da$raw_outputs`.
+`microeda_da()` exposes ALDEx2-, ANCOM-BC2-, and DESeq2-backed exploratory
+differential representation workflows. It uses method-native p-value
+adjustment, returns standardized results with `as_da_results()`, and preserves
+complete native backend output in `da$raw_outputs`.
 
 ```r
 if (requireNamespace("ALDEx2", quietly = TRUE)) {
@@ -305,20 +305,48 @@ if (requireNamespace("ANCOMBC", quietly = TRUE)) {
 }
 ```
 
-When both optional packages are installed, the same contrast plan can be
+DESeq2 is optional and can be installed with
+`BiocManager::install("DESeq2")`. It is provided as a sensitivity/comparison
+view based on a negative-binomial count model, not as a compositional
+correction. The default `poscounts` size-factor estimator supports sparse count
+tables without adding a pseudocount. Standardized effects are native unshrunk
+log2 fold changes for `group2 / group1`; native Cook's filtering, independent
+filtering, BH adjustment, and missing values are preserved. Pairwise requests
+fit each two-group comparison separately.
+
+```r
+if (requireNamespace("DESeq2", quietly = TRUE)) {
+  da_deseq2 <- microeda_da(
+    counts,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "deseq2",
+    tax_rank = "Genus",
+    taxa_are_rows = FALSE
+  )
+  as_da_summary(da_deseq2)
+  cat(microeda_da_report(da_deseq2, top_n = 5))
+}
+```
+
+When all optional packages are installed, the same contrast plan can be
 evaluated side-by-side. The standardized rows retain method-specific effect
-semantics and follow method order, then contrast order.
+semantics and follow method order, then contrast order. Agreement among methods
+is not treated as a consensus or confirmation.
 
 ```r
 if (requireNamespace("ALDEx2", quietly = TRUE) &&
-    requireNamespace("ANCOMBC", quietly = TRUE)) {
+    requireNamespace("ANCOMBC", quietly = TRUE) &&
+    requireNamespace("DESeq2", quietly = TRUE)) {
   da_multi <- microeda_da(
     counts,
     metadata = metadata,
     taxonomy = taxonomy,
     group = "group",
     contrast = "pairwise",
-    methods = c("aldex2", "ancombc2"),
+    methods = c("aldex2", "ancombc2", "deseq2"),
     tax_rank = "Genus",
     taxa_are_rows = FALSE,
     mc.samples = 128,
@@ -332,16 +360,17 @@ if (requireNamespace("ALDEx2", quietly = TRUE) &&
 ```
 
 Raw outputs remain separate. Explicit runs use
-`da$raw_outputs$aldex2` or `da$raw_outputs$ancombc2`. For pairwise runs,
-ALDEx2 retains `da$raw_outputs$aldex2$contrasts$A_vs_B`, while ANCOM-BC2 uses
-`da$raw_outputs$ancombc2$A_vs_B`; each ANCOM-BC2 contrast contains the complete
-native explicit result.
+`da$raw_outputs$aldex2`, `da$raw_outputs$ancombc2`, or
+`da$raw_outputs$deseq2`. For pairwise runs, ALDEx2 retains
+`da$raw_outputs$aldex2$contrasts$A_vs_B`, while ANCOM-BC2 and DESeq2 use
+`da$raw_outputs$ancombc2$A_vs_B` and `da$raw_outputs$deseq2$A_vs_B`.
+Each ANCOM-BC2 or DESeq2 contrast contains its complete native explicit result.
 
 For matched samples, identify pairs explicitly. microeda validates each
 contrast independently and never infers pairs from sample order. Native ALDEx2
 effect values are oriented as `group2 - group1`. Paired execution currently
 requires ALDEx2 to be the only requested method because repeated-measures
-ANCOM-BC2 is not implemented.
+ANCOM-BC2 and DESeq2 designs are not implemented.
 
 ```r
 metadata_paired <- metadata

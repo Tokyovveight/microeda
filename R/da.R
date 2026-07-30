@@ -1,9 +1,9 @@
-#' Run exploratory differential representation with ALDEx2 or ANCOM-BC2
+#' Run exploratory differential representation with optional DA backends
 #'
 #' `microeda_da()` runs a cautious differential representation workflow for
-#' microbiome count data. It can run ALDEx2, ANCOM-BC2, or both methods
-#' side-by-side. Results are standardized for downstream use while preserving
-#' each method's complete raw backend output in the returned object.
+#' microbiome count data. It can run ALDEx2, ANCOM-BC2, DESeq2, or ordered
+#' combinations side-by-side. Results are standardized for downstream use
+#' while preserving each method's complete raw backend output.
 #'
 #' This helper is exploratory: it uses method-native p-value adjustment, does
 #' not globally re-adjust backend outputs, does not rank methods, and does not
@@ -17,7 +17,8 @@
 #'   `"pairwise"` to run all pairwise group comparisons as separate explicit
 #'   backend analyses.
 #' @param methods Differential representation methods to run. Supported values
-#'   are `"aldex2"` and `"ancombc2"`. User-supplied method order is preserved.
+#'   are `"aldex2"`, `"ancombc2"`, and `"deseq2"`. User-supplied method order
+#'   is preserved.
 #' @param tax_rank Optional taxonomy rank used for `taxon_label`.
 #' @param prevalence_filter Optional filter value recorded for future use.
 #'   This wrapper does not apply filtering.
@@ -37,6 +38,16 @@
 #' @param ancombc2_p_adj_method Native p-value adjustment method passed directly
 #'   to `ANCOMBC::ancombc2()`. The default is `"holm"`. This argument does not
 #'   cause additional adjustment by microeda.
+#' @param deseq2_sf_type DESeq2 size-factor estimator. The default
+#'   `"poscounts"` supports sparse count tables without adding a pseudocount.
+#' @param deseq2_fit_type DESeq2 dispersion-fit type. Supported values are
+#'   `"parametric"`, `"local"`, `"mean"`, and `"glmGamPoi"`; the latter
+#'   requires the optional glmGamPoi package.
+#' @param deseq2_independent_filtering Logical; whether native DESeq2
+#'   independent filtering is used. Filtered features remain in standardized
+#'   results with native missing adjusted p-values.
+#' @param deseq2_alpha Target FDR used by DESeq2 to optimize independent
+#'   filtering. Must be strictly between zero and one.
 #'
 #' @details
 #' For ALDEx2 results, `effect` retains the native ALDEx2 effect size. microeda
@@ -62,15 +73,26 @@
 #'
 #' Multi-method results are descriptive side-by-side sensitivity views.
 #' microeda does not apply cross-method adjustment, consensus calls, voting, or
-#' method ranking. For pairwise runs, raw ANCOM-BC2 outputs are nested by
-#' contrast under `x$raw_outputs$ancombc2`; ALDEx2 retains its existing
-#' pairwise raw-output contract.
+#' method ranking. For pairwise runs, raw ANCOM-BC2 and DESeq2 outputs are
+#' nested by contrast under `x$raw_outputs$ancombc2` and
+#' `x$raw_outputs$deseq2`; ALDEx2 retains its existing pairwise raw-output
+#' contract.
+#'
+#' DESeq2 is an optional sensitivity/comparison backend and can be installed
+#' with `BiocManager::install("DESeq2")`. It uses a negative-binomial count
+#' model with unshrunk log2 fold changes oriented as `group2 / group1`.
+#' Pairwise requests fit each pair separately, including new size-factor and
+#' dispersion estimates. The default `"poscounts"` size-factor estimator does
+#' not add a pseudocount, but size-factor normalization is not a complete
+#' correction for microbiome compositionality. DESeq2 uses native
+#' contrast-specific independent filtering and BH adjustment; native missing
+#' p-values and adjusted p-values are retained.
 #'
 #' `mc.samples`, `denom`, `paired.test`, and `pair_id` are ALDEx2-specific.
-#' Explicitly supplying `mc.samples` or `denom` with ANCOM-BC2 alone is
-#' rejected. A multi-method run passes these arguments only to ALDEx2.
-#' `paired.test = TRUE` and `pair_id` are rejected whenever ANCOM-BC2 is
-#' requested because repeated-measures ANCOM-BC2 is not implemented.
+#' Explicitly supplying `mc.samples` or `denom` without ALDEx2 is rejected.
+#' A multi-method run passes these arguments only to ALDEx2. Paired execution
+#' is currently available only when ALDEx2 is the sole method;
+#' repeated-measures ANCOM-BC2 and DESeq2 designs are not implemented.
 #'
 #' @return A `microeda_da` object containing standardized results, method
 #'   results, preserved raw backend outputs, caveats, and parameters.
@@ -121,21 +143,47 @@ microeda_da <- function(x,
                         denom = "all",
                         paired.test = FALSE,
                         pair_id = NULL,
-                        ancombc2_p_adj_method = "holm") {
+                        ancombc2_p_adj_method = "holm",
+                        deseq2_sf_type = "poscounts",
+                        deseq2_fit_type = "parametric",
+                        deseq2_independent_filtering = TRUE,
+                        deseq2_alpha = 0.05) {
   mc_samples_supplied <- !missing(mc.samples)
   denom_supplied <- !missing(denom)
   ancombc2_adjustment_supplied <- !missing(ancombc2_p_adj_method)
+  deseq2_arguments_supplied <- c(
+    sf_type = !missing(deseq2_sf_type),
+    fit_type = !missing(deseq2_fit_type),
+    independent_filtering = !missing(deseq2_independent_filtering),
+    alpha = !missing(deseq2_alpha)
+  )
   methods <- da_validate_methods(methods)
-  if ("deseq2" %in% methods) {
+  has_aldex2 <- "aldex2" %in% methods
+  has_ancombc2 <- "ancombc2" %in% methods
+  has_deseq2 <- "deseq2" %in% methods
+
+  deseq2_params <- NULL
+  if (has_deseq2) {
+    da_validate_deseq2_public_arguments(
+      mc_samples_supplied = mc_samples_supplied && !has_aldex2,
+      denom_supplied = denom_supplied && !has_aldex2,
+      paired.test = paired.test,
+      pair_id = pair_id
+    )
+    deseq2_params <- da_validate_deseq2_params(list(
+      sf_type = deseq2_sf_type,
+      fit_type = deseq2_fit_type,
+      independent_filtering = deseq2_independent_filtering,
+      alpha = deseq2_alpha
+    ))
+  } else if (any(deseq2_arguments_supplied)) {
     stop(
-      "`methods = \"deseq2\"` is not implemented in this version of ",
-      "`microeda_da()`.",
+      "DESeq2-specific arguments can only be supplied when ",
+      "`methods` includes \"deseq2\".",
       call. = FALSE
     )
   }
 
-  has_aldex2 <- "aldex2" %in% methods
-  has_ancombc2 <- "ancombc2" %in% methods
   if (has_ancombc2) {
     da_validate_ancombc2_public_arguments(
       mc_samples_supplied = mc_samples_supplied && !has_aldex2,
@@ -143,15 +191,17 @@ microeda_da <- function(x,
       paired.test = paired.test,
       pair_id = pair_id
     )
+  } else if (ancombc2_adjustment_supplied) {
+    stop(
+      "`ancombc2_p_adj_method` can only be supplied when ",
+      "`methods` includes \"ancombc2\".",
+      call. = FALSE
+    )
+  }
+
+  if (has_ancombc2 || has_deseq2) {
     pair_id <- NULL
   } else {
-    if (ancombc2_adjustment_supplied) {
-      stop(
-        "`ancombc2_p_adj_method` can only be supplied when ",
-        "`methods = \"ancombc2\"`.",
-        call. = FALSE
-      )
-    }
     pair_id <- da_validate_pair_id_argument(
       pair_id = pair_id,
       paired.test = paired.test
@@ -183,10 +233,16 @@ microeda_da <- function(x,
         paired.test = paired.test
       ))
     }
+    if (identical(method, "ancombc2")) {
+      return(da_run_ancombc2(
+        context = context,
+        params = list(p_adj_method = ancombc2_p_adj_method)
+      ))
+    }
 
-    da_run_ancombc2(
+    da_run_deseq2(
       context = context,
-      params = list(p_adj_method = ancombc2_p_adj_method)
+      params = deseq2_params
     )
   })
   names(backend_results) <- methods
@@ -381,6 +437,28 @@ microeda_da_report <- function(x, top_n = 10, alpha = 0.05, digits = 3) {
       paste(
         "Interpret this as a method-specific exploratory/sensitivity view,",
         "not a confirmed biological discovery."
+      )
+    )
+  }
+
+  if ("deseq2" %in% x$methods) {
+    lines <- c(
+      lines,
+      paste(
+        "DESeq2 coefficients are unshrunk log2 estimates oriented as",
+        "group2 divided by group1."
+      ),
+      paste(
+        "DESeq2 uses a negative-binomial count model and native",
+        "contrast-specific independent filtering and BH adjustment."
+      ),
+      paste(
+        "Features filtered by DESeq2 or Cook's diagnostics remain as rows",
+        "with native missing values; see the caveats and raw diagnostics."
+      ),
+      paste(
+        "DESeq2 is a sensitivity/comparison view; size-factor normalization",
+        "does not fully address microbiome compositionality."
       )
     )
   }
@@ -1533,6 +1611,15 @@ da_validate_backend_availability <- function(methods) {
       call. = FALSE
     )
   }
+  if ("deseq2" %in% methods &&
+      !da_optional_package_available("DESeq2")) {
+    stop(
+      "`microeda_da()` requires the optional package `DESeq2` for ",
+      "`methods = \"deseq2\"`. Install it with ",
+      "`BiocManager::install(\"DESeq2\")`.",
+      call. = FALSE
+    )
+  }
 
   invisible(methods)
 }
@@ -1682,8 +1769,13 @@ da_method_note <- function(method) {
     topic = "differential_abundance",
     severity = "info",
     message = paste(
-      "DESeq2 is treated as a comparison/sensitivity method;",
-      "microbiome compositionality and sparsity can violate its assumptions."
+      "DESeq2 is treated as a comparison/sensitivity method using a",
+      "negative-binomial count model and size-factor normalization.",
+      "Its unshrunk log2 fold change is group2 divided by group1.",
+      "Native BH adjustment follows contrast-specific independent filtering;",
+      "missing native values are retained.",
+      "Size-factor normalization does not fully address microbiome",
+      "compositionality, and agreement with other methods is not confirmation."
     )
   )
 }
@@ -2035,8 +2127,12 @@ da_report_method_contrast_lines <- function(results,
       ),
       paste0("Native adjustment: ", adjustment),
       paste0(
-        "Tested features: ",
+        "Result features: ",
         summary$tested_features,
+        "; p-values available: ",
+        summary$n_p_value,
+        "; adjusted p-values available: ",
+        summary$n_p_adjusted,
         "; adjusted p <= ",
         alpha_label,
         ": ",

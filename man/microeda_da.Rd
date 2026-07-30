@@ -2,7 +2,7 @@
 % Please edit documentation in R/da.R
 \name{microeda_da}
 \alias{microeda_da}
-\title{Run exploratory differential representation with ALDEx2 or ANCOM-BC2}
+\title{Run exploratory differential representation with optional DA backends}
 \usage{
 microeda_da(
   x,
@@ -20,7 +20,11 @@ microeda_da(
   denom = "all",
   paired.test = FALSE,
   pair_id = NULL,
-  ancombc2_p_adj_method = "holm"
+  ancombc2_p_adj_method = "holm",
+  deseq2_sf_type = "poscounts",
+  deseq2_fit_type = "parametric",
+  deseq2_independent_filtering = TRUE,
+  deseq2_alpha = 0.05
 )
 }
 \arguments{
@@ -37,7 +41,8 @@ microeda_da(
 backend analyses.}
 
 \item{methods}{Differential representation methods to run. Supported values
-are \code{"aldex2"} and \code{"ancombc2"}. User-supplied method order is preserved.}
+are \code{"aldex2"}, \code{"ancombc2"}, and \code{"deseq2"}. User-supplied method order
+is preserved.}
 
 \item{tax_rank}{Optional taxonomy rank used for \code{taxon_label}.}
 
@@ -67,6 +72,20 @@ one \code{group2} sample.}
 \item{ancombc2_p_adj_method}{Native p-value adjustment method passed directly
 to \code{ANCOMBC::ancombc2()}. The default is \code{"holm"}. This argument does not
 cause additional adjustment by microeda.}
+
+\item{deseq2_sf_type}{DESeq2 size-factor estimator. The default
+\code{"poscounts"} supports sparse count tables without adding a pseudocount.}
+
+\item{deseq2_fit_type}{DESeq2 dispersion-fit type. Supported values are
+\code{"parametric"}, \code{"local"}, \code{"mean"}, and \code{"glmGamPoi"}; the latter
+requires the optional glmGamPoi package.}
+
+\item{deseq2_independent_filtering}{Logical; whether native DESeq2
+independent filtering is used. Filtered features remain in standardized
+results with native missing adjusted p-values.}
+
+\item{deseq2_alpha}{Target FDR used by DESeq2 to optimize independent
+filtering. Must be strictly between zero and one.}
 }
 \value{
 A \code{microeda_da} object containing standardized results, method
@@ -74,9 +93,9 @@ results, preserved raw backend outputs, caveats, and parameters.
 }
 \description{
 \code{microeda_da()} runs a cautious differential representation workflow for
-microbiome count data. It can run ALDEx2, ANCOM-BC2, or both methods
-side-by-side. Results are standardized for downstream use while preserving
-each method's complete raw backend output in the returned object.
+microbiome count data. It can run ALDEx2, ANCOM-BC2, DESeq2, or ordered
+combinations side-by-side. Results are standardized for downstream use
+while preserving each method's complete raw backend output.
 }
 \details{
 This helper is exploratory: it uses method-native p-value adjustment, does
@@ -106,15 +125,26 @@ each method and contrast and are not adjusted again by microeda.
 
 Multi-method results are descriptive side-by-side sensitivity views.
 microeda does not apply cross-method adjustment, consensus calls, voting, or
-method ranking. For pairwise runs, raw ANCOM-BC2 outputs are nested by
-contrast under \code{x$raw_outputs$ancombc2}; ALDEx2 retains its existing
-pairwise raw-output contract.
+method ranking. For pairwise runs, raw ANCOM-BC2 and DESeq2 outputs are
+nested by contrast under \code{x$raw_outputs$ancombc2} and
+\code{x$raw_outputs$deseq2}; ALDEx2 retains its existing pairwise raw-output
+contract.
+
+DESeq2 is an optional sensitivity/comparison backend and can be installed
+with \code{BiocManager::install("DESeq2")}. It uses a negative-binomial count
+model with unshrunk log2 fold changes oriented as \code{group2 / group1}.
+Pairwise requests fit each pair separately, including new size-factor and
+dispersion estimates. The default \code{"poscounts"} size-factor estimator does
+not add a pseudocount, but size-factor normalization is not a complete
+correction for microbiome compositionality. DESeq2 uses native
+contrast-specific independent filtering and BH adjustment; native missing
+p-values and adjusted p-values are retained.
 
 \code{mc.samples}, \code{denom}, \code{paired.test}, and \code{pair_id} are ALDEx2-specific.
-Explicitly supplying \code{mc.samples} or \code{denom} with ANCOM-BC2 alone is
-rejected. A multi-method run passes these arguments only to ALDEx2.
-\code{paired.test = TRUE} and \code{pair_id} are rejected whenever ANCOM-BC2 is
-requested because repeated-measures ANCOM-BC2 is not implemented.
+Explicitly supplying \code{mc.samples} or \code{denom} without ALDEx2 is rejected.
+A multi-method run passes these arguments only to ALDEx2. Paired execution
+is currently available only when ALDEx2 is the sole method;
+repeated-measures ANCOM-BC2 and DESeq2 designs are not implemented.
 }
 \examples{
 counts <- matrix(

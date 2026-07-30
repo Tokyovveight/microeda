@@ -21,6 +21,7 @@ Imports:
 Suggests:
     ALDEx2,
     ANCOMBC,
+    DESeq2,
     phyloseq,
     testthat (>= 3.0.0),
     vegan
