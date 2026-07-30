@@ -1,8 +1,11 @@
 #' Extract one method- and contrast-specific DA raw output
 #'
 #' `as_da_raw_output()` provides a stable access path across the different raw
-#' output nesting used by ALDEx2, ANCOM-BC2, and DESeq2. The returned object is
-#' not transformed; its structure remains specific to the selected backend.
+#' output nesting used by ALDEx2, ANCOM-BC2, and DESeq2. With
+#' `raw_storage = "full"`, the complete selected object is returned. With
+#' `"compact"`, the returned method-specific list is marked
+#' `raw_storage = "compact"` and omits large fit/intermediate objects. No raw
+#' object is available when the analysis used `raw_storage = "none"`.
 #'
 #' @param x A `microeda_da` object.
 #' @param method Optional single method ID. It may be omitted only when `x`
@@ -10,7 +13,7 @@
 #' @param contrast Optional single contrast label. It may be omitted only when
 #'   `x` contains one contrast.
 #'
-#' @return The selected method-specific raw backend object.
+#' @return The selected method-specific full or compact raw backend object.
 #'
 #' @seealso [as_da_results()], [as_da_comparison()]
 #'
@@ -24,6 +27,16 @@ as_da_raw_output <- function(x, method = NULL, contrast = NULL) {
   da_comparison_validate_x(x)
   method <- da_raw_output_method(x, method)
   contrast <- da_raw_output_contrast(x, contrast)
+  raw_storage <- da_raw_storage_mode(x)
+
+  if (identical(raw_storage, "none")) {
+    stop(
+      "Native output was not retained because `raw_storage = \"none\"`. ",
+      "Repeat `microeda_da()` with `raw_storage = \"full\"` or ",
+      "`raw_storage = \"compact\"` to retain method-native output.",
+      call. = FALSE
+    )
+  }
 
   if (is.null(x$raw_outputs) || !is.list(x$raw_outputs) ||
       !method %in% names(x$raw_outputs)) {
@@ -202,7 +215,11 @@ as_da_comparison <- function(x,
 #' Unless `features` is supplied, feature rows are displayed when at least one
 #' selected method has a finite native adjusted p-value no greater than
 #' `alpha`. This controls display only and is not a consensus rule. Truncation
-#' by `max_features` preserves the original feature order.
+#' by `max_features` preserves the original feature order. Feature values use
+#' a compact long layout so method blocks remain readable in a console; the
+#' wide table returned by [as_da_comparison()] is unchanged. Very small native
+#' adjusted p-values use compact scientific notation and are never rounded to
+#' zero for display.
 #'
 #' @seealso [as_da_comparison()], [as_da_raw_output()],
 #'   [microeda_da_report()]
@@ -240,7 +257,7 @@ microeda_da_comparison_report <- function(x,
     "",
     paste0("Methods: ", paste(selected_methods, collapse = ", ")),
     paste0("Contrasts: ", paste(selected_contrasts, collapse = ", ")),
-    paste0("Display alpha: ", da_report_number(alpha, digits = 3)),
+    paste0("Display alpha: ", da_report_probability(alpha, digits = 3)),
     "",
     paste(
       "Effect scales differ: ALDEx2 uses its native effect, ANCOM-BC2 uses",
@@ -293,7 +310,7 @@ microeda_da_comparison_report <- function(x,
         paste0(
           "Display criterion: at least one selected method has a finite ",
           "native adjusted p-value <= ",
-          da_report_number(alpha, digits = 3),
+          da_report_probability(alpha, digits = 3),
           ". This is a display filter, not a consensus call."
         )
       )
@@ -323,8 +340,13 @@ microeda_da_comparison_report <- function(x,
     lines <- c(
       lines,
       "Side-by-side standardized values:",
-      da_report_table_lines(
-        da_comparison_report_table(display, selected_methods),
+      paste(
+        "Tested: TRUE = native p-value available; FALSE = returned but",
+        "native p-value missing; NA = feature absent from that backend."
+      ),
+      da_comparison_feature_report_lines(
+        data = display,
+        methods = selected_methods,
         digits = 3
       )
     )
@@ -360,13 +382,11 @@ microeda_da_comparison_report <- function(x,
       "- Agreement among methods is a descriptive sensitivity pattern,",
       "not proof of a biological discovery."
     ),
-    paste(
-      "- DESeq2 is a count-model sensitivity/comparison method;",
-      "size-factor normalization is not a compositional correction."
-    )
+    "- DESeq2 is a count-model sensitivity/comparison method;",
+    "  size-factor normalization is not a compositional correction."
   )
 
-  paste(lines, collapse = "\n")
+  paste(da_wrap_report_lines(lines), collapse = "\n")
 }
 
 #' Write a side-by-side DA comparison table to CSV
@@ -802,7 +822,7 @@ da_comparison_method_report_lines <- function(x,
     paste0("Features with p_adjusted: ", sum(p_adjusted_present)),
     paste0(
       "Features with p_adjusted <= ",
-      da_report_number(alpha, digits = 3),
+      da_report_probability(alpha, digits = 3),
       ": ",
       sum(p_adjusted_present & rows$p_adjusted <= alpha)
     ),
@@ -827,6 +847,12 @@ da_comparison_backend_diagnostic_lines <- function(x,
                                                    method,
                                                    contrast,
                                                    features) {
+  if (identical(da_raw_storage_mode(x), "none")) {
+    return(
+      "Backend diagnostics unavailable because native output was not retained."
+    )
+  }
+
   raw <- as_da_raw_output(x, method = method, contrast = contrast)
   if (identical(method, "deseq2") &&
       is.data.frame(raw$feature_diagnostics)) {
@@ -896,6 +922,71 @@ da_comparison_report_table <- function(data, methods) {
     )
   }
   data[, columns, drop = FALSE]
+}
+
+da_comparison_feature_report_lines <- function(data, methods, digits) {
+  if (nrow(data) == 0) {
+    return("No feature rows available.")
+  }
+
+  method_width <- max(8L, nchar(methods))
+  format_cell <- function(x, width) {
+    format(x, width = width, justify = "left")
+  }
+  header <- paste0(
+    "  ",
+    format_cell("Method", method_width),
+    "  ",
+    format_cell("Effect", 12L),
+    "  ",
+    format_cell("Adj. p", 12L),
+    "  ",
+    format_cell("Tested", 7L),
+    "  Sign"
+  )
+
+  blocks <- lapply(seq_len(nrow(data)), function(i) {
+    row <- data[i, , drop = FALSE]
+    feature_lines <- c(
+      paste0(
+        "Feature: ",
+        da_report_value(row$feature_id),
+        " | Contrast: ",
+        da_report_value(row$contrast)
+      ),
+      da_wrap_labeled_value(
+        "  Taxon: ",
+        da_report_value(row$taxon_label)
+      ),
+      header
+    )
+
+    method_lines <- vapply(methods, function(method) {
+      effect <- row[[paste0(method, "_effect")]]
+      adjusted <- row[[paste0(method, "_p_adjusted")]]
+      tested <- row[[paste0(method, "_tested")]]
+      sign <- row[[paste0(method, "_effect_sign")]]
+      paste0(
+        "  ",
+        format_cell(method, method_width),
+        "  ",
+        format_cell(da_report_number(effect, digits = digits), 12L),
+        "  ",
+        format_cell(
+          da_report_probability(adjusted, digits = digits),
+          12L
+        ),
+        "  ",
+        format_cell(da_report_value(tested), 7L),
+        "  ",
+        da_report_value(sign)
+      )
+    }, character(1))
+
+    c(feature_lines, method_lines)
+  })
+
+  unlist(blocks, use.names = FALSE)
 }
 
 da_comparison_validate_file <- function(file) {

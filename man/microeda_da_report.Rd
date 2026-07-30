@@ -24,7 +24,9 @@ A single character string suitable for \code{cat()}.
 \code{microeda_da_report()} formats a \code{microeda_da} object as a plain-text,
 console-friendly report. It summarizes contrasts, adjusted p-value counts,
 selected standardized rows, caveats, and where to find standardized and raw
-backend outputs.
+backend outputs. Long notes and taxonomy labels are wrapped for console use;
+very small probabilities use compact scientific notation rather than being
+rounded to zero.
 }
 \details{
 The report is descriptive and exploratory. It does not change differential

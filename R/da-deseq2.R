@@ -56,20 +56,35 @@ da_run_deseq2 <- function(context, contrast_row = NULL, params) {
 
   params <- da_validate_deseq2_params(params)
   if (!is.null(contrast_row)) {
-    return(da_run_deseq2_contrast(
+    return(da_execute_contrast(
       context = context,
+      method = "deseq2",
       contrast_row = contrast_row,
-      params = params
+      runner = function() {
+        da_run_deseq2_contrast(
+          context = context,
+          contrast_row = contrast_row,
+          params = params
+        )
+      }
     ))
   }
 
   contrast_plan <- context$contrast_plan
   if (nrow(contrast_plan) == 1 &&
       identical(contrast_plan$contrast_type, "explicit")) {
-    return(da_run_deseq2_contrast(
+    contrast_row <- contrast_plan[1, , drop = FALSE]
+    return(da_execute_contrast(
       context = context,
-      contrast_row = contrast_plan[1, , drop = FALSE],
-      params = params
+      method = "deseq2",
+      contrast_row = contrast_row,
+      runner = function() {
+        da_run_deseq2_contrast(
+          context = context,
+          contrast_row = contrast_row,
+          params = params
+        )
+      }
     ))
   }
   if (!all(contrast_plan$contrast_type == "pairwise")) {
@@ -82,10 +97,17 @@ da_run_deseq2 <- function(context, contrast_row = NULL, params) {
   contrast_results <- lapply(seq_len(nrow(contrast_plan)), function(i) {
     contrast_row <- contrast_plan[i, , drop = FALSE]
     tryCatch(
-      da_run_deseq2_contrast(
+      da_execute_contrast(
         context = context,
+        method = "deseq2",
         contrast_row = contrast_row,
-        params = params
+        runner = function() {
+          da_run_deseq2_contrast(
+            context = context,
+            contrast_row = contrast_row,
+            params = params
+          )
+        }
       ),
       error = function(e) {
         stop(

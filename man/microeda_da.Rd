@@ -24,7 +24,9 @@ microeda_da(
   deseq2_sf_type = "poscounts",
   deseq2_fit_type = "parametric",
   deseq2_independent_filtering = TRUE,
-  deseq2_alpha = 0.05
+  deseq2_alpha = 0.05,
+  raw_storage = c("full", "compact", "none"),
+  progress = FALSE
 )
 }
 \arguments{
@@ -86,16 +88,25 @@ results with native missing adjusted p-values.}
 
 \item{deseq2_alpha}{Target FDR used by DESeq2 to optimize independent
 filtering. Must be strictly between zero and one.}
+
+\item{raw_storage}{Native backend-output retention policy. \code{"full"} keeps
+complete fit objects for maximum auditability, \code{"compact"} keeps native
+result tables and diagnostics without the largest fit/intermediate
+objects, and \code{"none"} keeps standardized results without native output.}
+
+\item{progress}{Logical; when \code{TRUE}, emit method/contrast start and finish
+messages with elapsed wall-clock time.}
 }
 \value{
 A \code{microeda_da} object containing standardized results, method
-results, preserved raw backend outputs, caveats, and parameters.
+results, raw backend outputs retained according to \code{raw_storage}, caveats,
+timings, and parameters.
 }
 \description{
 \code{microeda_da()} runs a cautious differential representation workflow for
 microbiome count data. It can run ALDEx2, ANCOM-BC2, DESeq2, or ordered
-combinations side-by-side. Results are standardized for downstream use
-while preserving each method's complete raw backend output.
+combinations side-by-side. Results are standardized for downstream use,
+with configurable retention of method-native backend output.
 }
 \details{
 This helper is exploratory: it uses method-native p-value adjustment, does
@@ -145,6 +156,11 @@ Explicitly supplying \code{mc.samples} or \code{denom} without ALDEx2 is rejecte
 A multi-method run passes these arguments only to ALDEx2. Paired execution
 is currently available only when ALDEx2 is the sole method;
 repeated-measures ANCOM-BC2 and DESeq2 designs are not implemented.
+
+\code{raw_storage = "compact"} reduces the returned object size but does not
+reduce peak memory required while a backend is running. Per-contrast
+timings are always recorded in \code{x$params$timings}; total elapsed time is
+stored in \code{x$params$total_elapsed_seconds}.
 }
 \examples{
 counts <- matrix(

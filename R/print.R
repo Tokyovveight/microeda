@@ -360,6 +360,17 @@ print.microeda_da <- function(x, ...) {
   }
 
   cat("Result rows: ", nrow(x$results), "\n", sep = "")
+  cat("Raw storage: ", da_raw_storage_mode(x), "\n", sep = "")
+  total_elapsed <- x$params$total_elapsed_seconds
+  if (is.numeric(total_elapsed) && length(total_elapsed) == 1 &&
+      is.finite(total_elapsed) && total_elapsed >= 0) {
+    cat(
+      "Elapsed:      ",
+      format(round(total_elapsed, 1), nsmall = 1, trim = TRUE),
+      " s\n",
+      sep = ""
+    )
+  }
 
   caveats <- x$caveats
   cat("Caveats:     ", nrow(caveats), sep = "")
@@ -383,7 +394,11 @@ print.microeda_da <- function(x, ...) {
   cat("Use as_da_summary(x) for a compact per-contrast summary.\n")
   cat("Use microeda_da_report(x) for a readable text report.\n")
   cat("Use write_da_results(x, file) to export standardized results to CSV.\n")
-  cat("Raw backend outputs are available in x$raw_outputs.\n")
+  if (identical(da_raw_storage_mode(x), "none")) {
+    cat("Native backend outputs were not retained (raw_storage = \"none\").\n")
+  } else {
+    cat("Raw backend outputs are available in x$raw_outputs.\n")
+  }
   invisible(x)
 }
 

@@ -2,8 +2,8 @@
 #'
 #' `microeda_da()` runs a cautious differential representation workflow for
 #' microbiome count data. It can run ALDEx2, ANCOM-BC2, DESeq2, or ordered
-#' combinations side-by-side. Results are standardized for downstream use
-#' while preserving each method's complete raw backend output.
+#' combinations side-by-side. Results are standardized for downstream use,
+#' with configurable retention of method-native backend output.
 #'
 #' This helper is exploratory: it uses method-native p-value adjustment, does
 #' not globally re-adjust backend outputs, does not rank methods, and does not
@@ -48,6 +48,12 @@
 #'   results with native missing adjusted p-values.
 #' @param deseq2_alpha Target FDR used by DESeq2 to optimize independent
 #'   filtering. Must be strictly between zero and one.
+#' @param raw_storage Native backend-output retention policy. `"full"` keeps
+#'   complete fit objects for maximum auditability, `"compact"` keeps native
+#'   result tables and diagnostics without the largest fit/intermediate
+#'   objects, and `"none"` keeps standardized results without native output.
+#' @param progress Logical; when `TRUE`, emit method/contrast start and finish
+#'   messages with elapsed wall-clock time.
 #'
 #' @details
 #' For ALDEx2 results, `effect` retains the native ALDEx2 effect size. microeda
@@ -94,8 +100,14 @@
 #' is currently available only when ALDEx2 is the sole method;
 #' repeated-measures ANCOM-BC2 and DESeq2 designs are not implemented.
 #'
+#' `raw_storage = "compact"` reduces the returned object size but does not
+#' reduce peak memory required while a backend is running. Per-contrast
+#' timings are always recorded in `x$params$timings`; total elapsed time is
+#' stored in `x$params$total_elapsed_seconds`.
+#'
 #' @return A `microeda_da` object containing standardized results, method
-#'   results, preserved raw backend outputs, caveats, and parameters.
+#'   results, raw backend outputs retained according to `raw_storage`, caveats,
+#'   timings, and parameters.
 #'
 #' @examples
 #' counts <- matrix(
@@ -147,7 +159,12 @@ microeda_da <- function(x,
                         deseq2_sf_type = "poscounts",
                         deseq2_fit_type = "parametric",
                         deseq2_independent_filtering = TRUE,
-                        deseq2_alpha = 0.05) {
+                        deseq2_alpha = 0.05,
+                        raw_storage = c("full", "compact", "none"),
+                        progress = FALSE) {
+  total_started <- proc.time()[["elapsed"]]
+  raw_storage <- match.arg(raw_storage)
+  progress <- da_validate_progress(progress)
   mc_samples_supplied <- !missing(mc.samples)
   denom_supplied <- !missing(denom)
   ancombc2_adjustment_supplied <- !missing(ancombc2_p_adj_method)
@@ -224,30 +241,62 @@ microeda_da <- function(x,
   )
   da_validate_backend_availability(methods)
 
-  backend_results <- lapply(methods, function(method) {
+  execution <- da_execution_state(
+    progress = progress,
+    total_methods = length(methods)
+  )
+  backend_results <- vector("list", length(methods))
+  for (i in seq_along(methods)) {
+    method <- methods[[i]]
+    method_context <- da_execution_context(
+      context = context,
+      state = execution,
+      method_index = i
+    )
+    da_progress_method(method_context, method)
+
     if (identical(method, "aldex2")) {
-      return(da_run_aldex2(
-        context,
+      backend_result <- da_run_aldex2(
+        method_context,
         mc.samples = mc.samples,
         denom = denom,
         paired.test = paired.test
-      ))
-    }
-    if (identical(method, "ancombc2")) {
-      return(da_run_ancombc2(
-        context = context,
+      )
+    } else if (identical(method, "ancombc2")) {
+      backend_result <- da_run_ancombc2(
+        context = method_context,
         params = list(p_adj_method = ancombc2_p_adj_method)
-      ))
+      )
+    } else {
+      backend_result <- da_run_deseq2(
+        context = method_context,
+        params = deseq2_params
+      )
     }
 
-    da_run_deseq2(
-      context = context,
-      params = deseq2_params
+    method_timings <- execution$timings[
+      execution$timings$method == method,
+      ,
+      drop = FALSE
+    ]
+    backend_results[[i]] <- da_apply_raw_storage(
+      backend_result = backend_result,
+      raw_storage = raw_storage,
+      contrast_plan = context$contrast_plan,
+      timings = method_timings
     )
-  })
+  }
   names(backend_results) <- methods
 
-  da_build_result_object(context, backend_results)
+  out <- da_build_result_object(context, backend_results)
+  out$params$raw_storage <- raw_storage
+  out$params$timings <- execution$timings
+  out$params$total_elapsed_seconds <- max(
+    0,
+    proc.time()[["elapsed"]] - total_started
+  )
+  attr(out, "raw_storage") <- raw_storage
+  out
 }
 
 #' Extract standardized differential representation results
@@ -337,7 +386,9 @@ as_da_summary <- function(x, alpha = 0.05) {
 #' `microeda_da_report()` formats a `microeda_da` object as a plain-text,
 #' console-friendly report. It summarizes contrasts, adjusted p-value counts,
 #' selected standardized rows, caveats, and where to find standardized and raw
-#' backend outputs.
+#' backend outputs. Long notes and taxonomy labels are wrapped for console use;
+#' very small probabilities use compact scientific notation rather than being
+#' rounded to zero.
 #'
 #' The report is descriptive and exploratory. It does not change differential
 #' representation calculations, globally re-adjust p-values, rank methods, or
@@ -507,11 +558,12 @@ microeda_da_report <- function(x, top_n = 10, alpha = 0.05, digits = 3) {
     "These rows are exploratory method outputs, not confirmed biological discoveries.",
     "",
     "Raw output:",
-    "Raw backend outputs are in x$raw_outputs.",
+    paste0("Raw storage mode: ", da_raw_storage_mode(x), "."),
+    da_report_raw_output_hint(x),
     "Standardized table is available with as_da_results(x)."
   )
 
-  paste(lines, collapse = "\n")
+  paste(da_wrap_report_lines(lines), collapse = "\n")
 }
 
 #' Write standardized differential representation results to CSV
@@ -905,10 +957,18 @@ da_run_aldex2 <- function(context,
 
   if (nrow(context$contrast_plan) == 1 &&
       identical(context$contrast_plan$contrast_type, "explicit")) {
-    return(da_run_aldex2_contrast(
+    contrast_row <- context$contrast_plan[1, , drop = FALSE]
+    return(da_execute_contrast(
       context = context,
-      contrast_row = context$contrast_plan[1, , drop = FALSE],
-      params = params
+      method = "aldex2",
+      contrast_row = contrast_row,
+      runner = function() {
+        da_run_aldex2_contrast(
+          context = context,
+          contrast_row = contrast_row,
+          params = params
+        )
+      }
     ))
   }
 
@@ -920,10 +980,18 @@ da_run_aldex2 <- function(context,
   }
 
   contrast_results <- lapply(seq_len(nrow(context$contrast_plan)), function(i) {
-    da_run_aldex2_contrast(
+    contrast_row <- context$contrast_plan[i, , drop = FALSE]
+    da_execute_contrast(
       context = context,
-      contrast_row = context$contrast_plan[i, , drop = FALSE],
-      params = params
+      method = "aldex2",
+      contrast_row = contrast_row,
+      runner = function() {
+        da_run_aldex2_contrast(
+          context = context,
+          contrast_row = contrast_row,
+          params = params
+        )
+      }
     )
   })
   contrast_labels <- context$contrast_plan$contrast
@@ -2118,8 +2186,8 @@ da_report_method_contrast_lines <- function(results,
       da_summary_collapse_unique(rows$p_adjust_scope),
       ")"
     )
-    alpha_label <- da_report_number(alpha, digits = digits)
-    min_adjusted <- da_report_number(
+    alpha_label <- da_report_probability(alpha, digits = digits)
+    min_adjusted <- da_report_probability(
       summary$min_p_adjusted,
       digits = digits
     )
@@ -2162,19 +2230,8 @@ da_report_method_contrast_lines <- function(results,
     top_rows <- da_report_top_rows(rows, top_n = top_n)
     c(
       block,
-      da_report_table_lines(
-        top_rows[
-          ,
-          c(
-            "feature_id",
-            "taxon_label",
-            "effect",
-            "p_value",
-            "p_adjusted",
-            "significance"
-          ),
-          drop = FALSE
-        ],
+      da_report_top_feature_lines(
+        top_rows,
         digits = digits
       )
     )
@@ -2193,8 +2250,12 @@ da_report_table_lines <- function(data, digits) {
     return("No columns.")
   }
 
-  formatted <- lapply(data, function(column) {
+  formatted <- lapply(seq_along(data), function(i) {
+    column <- data[[i]]
     if (is.numeric(column)) {
+      if (da_report_probability_column(headers[[i]])) {
+        return(da_report_probability(column, digits = digits))
+      }
       return(da_report_number(column, digits = digits))
     }
 
@@ -2232,6 +2293,44 @@ da_report_number <- function(x, digits) {
   out
 }
 
+da_report_probability <- function(x, digits = 3) {
+  out <- rep("NA", length(x))
+  present <- !is.na(x)
+  zero <- present & x == 0
+  small <- present & x > 0 & x < 0.001
+  regular <- present & !zero & !small
+
+  out[zero] <- "<2.2e-308"
+  if (any(small)) {
+    out[small] <- formatC(
+      x[small],
+      format = "e",
+      digits = max(1L, as.integer(digits))
+    )
+    out[small] <- sub("e\\+?", "e", out[small])
+  }
+  if (any(regular)) {
+    decimals <- max(3L, as.integer(digits))
+    out[regular] <- formatC(
+      x[regular],
+      format = "f",
+      digits = decimals
+    )
+    out[regular] <- sub("\\.?0+$", "", out[regular])
+  }
+
+  out
+}
+
+da_report_probability_column <- function(name) {
+  name %in% c(
+    "p_value",
+    "p_adjusted",
+    "min_p_adjusted",
+    "top_p_adjusted"
+  ) || grepl("_(p_value|p_adjusted)$", name)
+}
+
 da_report_value <- function(x) {
   if (length(x) == 0) {
     return("NA")
@@ -2247,22 +2346,117 @@ da_report_caveat_lines <- function(caveats) {
     return("None.")
   }
 
-  vapply(seq_len(nrow(caveats)), function(i) {
+  lines <- lapply(seq_len(nrow(caveats)), function(i) {
     row <- caveats[i, , drop = FALSE]
     method <- if (is.na(row$method) || !nzchar(row$method)) {
       "input"
     } else {
       row$method
     }
-    paste0(
-      "- [",
-      row$severity,
-      "] ",
-      method,
-      "/",
-      row$caveat_id,
-      ": ",
+    da_wrap_labeled_value(
+      paste0(
+        "- [",
+        row$severity,
+        "] ",
+        method,
+        "/",
+        row$caveat_id,
+        ": "
+      ),
       row$message
     )
-  }, character(1))
+  })
+  unlist(lines, use.names = FALSE)
+}
+
+da_report_top_feature_lines <- function(data, digits) {
+  if (nrow(data) == 0) {
+    return("No rows available.")
+  }
+
+  blocks <- lapply(seq_len(nrow(data)), function(i) {
+    row <- data[i, , drop = FALSE]
+    c(
+      paste0("Feature: ", da_report_value(row$feature_id)),
+      da_wrap_labeled_value(
+        "  Taxon: ",
+        da_report_value(row$taxon_label)
+      ),
+      paste0(
+        "  Effect: ",
+        da_report_number(row$effect, digits = digits),
+        "; p-value: ",
+        da_report_probability(row$p_value, digits = digits),
+        "; adjusted p: ",
+        da_report_probability(row$p_adjusted, digits = digits),
+        "; significance: ",
+        da_report_value(row$significance)
+      )
+    )
+  })
+  unlist(blocks, use.names = FALSE)
+}
+
+da_wrap_labeled_value <- function(label, value, width = 105L) {
+  text <- paste0(label, value)
+  if (nchar(text) <= width) {
+    return(text)
+  }
+
+  wrapped <- strwrap(
+    value,
+    width = width,
+    initial = label,
+    prefix = strrep(" ", nchar(label))
+  )
+  if (length(wrapped) == 0) {
+    label
+  } else {
+    wrapped
+  }
+}
+
+da_wrap_report_lines <- function(lines, width = 105L) {
+  wrapped <- lapply(lines, function(line) {
+    if (is.na(line) || !nzchar(line) || nchar(line) <= width) {
+      return(line)
+    }
+
+    leading <- regmatches(line, regexpr("^\\s*", line))
+    content <- substring(line, nchar(leading) + 1L)
+    continuation <- if (startsWith(content, "- ")) {
+      paste0(leading, "  ")
+    } else {
+      leading
+    }
+    strwrap(
+      content,
+      width = max(20L, width - nchar(leading)),
+      initial = leading,
+      prefix = continuation
+    )
+  })
+  unlist(wrapped, use.names = FALSE)
+}
+
+da_report_raw_output_hint <- function(x) {
+  mode <- da_raw_storage_mode(x)
+  if (identical(mode, "compact")) {
+    return(
+      paste(
+        "Compact native tables and diagnostics are in x$raw_outputs;",
+        "large fit/intermediate objects were not retained."
+      )
+    )
+  }
+  if (identical(mode, "none")) {
+    return(
+      paste(
+        "Native backend outputs were not retained in x$raw_outputs;",
+        "rerun with raw_storage = \"full\" or \"compact\" for native access."
+      )
+    )
+  }
+
+  "Raw backend outputs are in x$raw_outputs."
 }

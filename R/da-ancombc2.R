@@ -66,10 +66,18 @@ da_run_ancombc2 <- function(context, contrast_row = NULL, params) {
   contrast_plan <- context$contrast_plan
   if (nrow(contrast_plan) == 1 &&
       identical(contrast_plan$contrast_type, "explicit")) {
-    return(da_run_ancombc2_contrast(
+    contrast_row <- contrast_plan[1, , drop = FALSE]
+    return(da_execute_contrast(
       context = context,
-      contrast_row = contrast_plan[1, , drop = FALSE],
-      params = params
+      method = "ancombc2",
+      contrast_row = contrast_row,
+      runner = function() {
+        da_run_ancombc2_contrast(
+          context = context,
+          contrast_row = contrast_row,
+          params = params
+        )
+      }
     ))
   }
   if (!all(contrast_plan$contrast_type == "pairwise")) {
@@ -82,10 +90,17 @@ da_run_ancombc2 <- function(context, contrast_row = NULL, params) {
   contrast_results <- lapply(seq_len(nrow(contrast_plan)), function(i) {
     contrast_row <- contrast_plan[i, , drop = FALSE]
     tryCatch(
-      da_run_ancombc2_contrast(
+      da_execute_contrast(
         context = context,
+        method = "ancombc2",
         contrast_row = contrast_row,
-        params = params
+        runner = function() {
+          da_run_ancombc2_contrast(
+            context = context,
+            contrast_row = contrast_row,
+            params = params
+          )
+        }
       ),
       error = function(e) {
         stop(
@@ -638,7 +653,14 @@ da_ancombc2_notes <- function(warnings,
         caveat_id = paste0("ancombc2_backend_warning_", i),
         topic = "backend",
         severity = "warning",
-        message = paste0("ANCOM-BC2 reported: ", warnings[[i]])
+        message = paste0(
+          "ANCOM-BC2 reported for contrast ",
+          contrast,
+          ": ",
+          warnings[[i]],
+          " Inspect retained native output with as_da_raw_output() when raw ",
+          "output storage is enabled."
+        )
       )
     })
     rows <- c(rows, warning_rows)

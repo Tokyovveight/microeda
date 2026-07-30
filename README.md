@@ -253,8 +253,8 @@ effective numbers of taxa.
 
 `microeda_da()` exposes ALDEx2-, ANCOM-BC2-, and DESeq2-backed exploratory
 differential representation workflows. It uses method-native p-value
-adjustment, returns standardized results with `as_da_results()`, and preserves
-complete native backend output in `da$raw_outputs`.
+adjustment, returns standardized results with `as_da_results()`, and supports
+controlled retention of method-native backend output in `da$raw_outputs`.
 
 ```r
 if (requireNamespace("ALDEx2", quietly = TRUE)) {
@@ -350,7 +350,9 @@ if (requireNamespace("ALDEx2", quietly = TRUE) &&
     tax_rank = "Genus",
     taxa_are_rows = FALSE,
     mc.samples = 128,
-    ancombc2_p_adj_method = "holm"
+    ancombc2_p_adj_method = "holm",
+    raw_storage = "compact",
+    progress = TRUE
   )
   cat(microeda_da_report(da_multi))
   results <- as_da_results(da_multi)
@@ -359,12 +361,45 @@ if (requireNamespace("ALDEx2", quietly = TRUE) &&
 }
 ```
 
-Raw outputs remain separate. Explicit runs use
+Native-output retention is explicit:
+
+```r
+da_compact <- microeda_da(
+  ps,
+  group = "Location",
+  contrast = c("Arsk", "Laishevo"),
+  methods = c("aldex2", "ancombc2", "deseq2"),
+  raw_storage = "compact",
+  progress = TRUE
+)
+```
+
+- `raw_storage = "full"` is the backward-compatible default and keeps complete
+  fit objects for maximum auditability, at the largest returned-object size.
+- `raw_storage = "compact"` keeps native result tables, mapping metadata,
+  warnings/messages, and diagnostics without large fit/intermediate objects.
+- `raw_storage = "none"` keeps standardized results, caveats, parameters, and
+  timings only; `as_da_raw_output()` then explains how to rerun with retention.
+
+Compact or no raw storage reduces the returned object size, but it does not
+reduce peak memory required while a backend is running. Per-contrast timings
+are always available in `da$params$timings`, and total elapsed time is in
+`da$params$total_elapsed_seconds`. `progress = TRUE` emits method/contrast
+start and finish messages without mixing them with captured backend warnings.
+The `method_results` and `raw_outputs` paths reference the same retained raw
+lists when the object is built; recursive `object.size()` reporting can count
+both paths and overstate independently allocated memory.
+
+With `raw_storage = "full"` or `"compact"`, raw outputs remain separate.
+Explicit runs use
 `da$raw_outputs$aldex2`, `da$raw_outputs$ancombc2`, or
 `da$raw_outputs$deseq2`. For pairwise runs, ALDEx2 retains
 `da$raw_outputs$aldex2$contrasts$A_vs_B`, while ANCOM-BC2 and DESeq2 use
 `da$raw_outputs$ancombc2$A_vs_B` and `da$raw_outputs$deseq2$A_vs_B`.
-Each ANCOM-BC2 or DESeq2 contrast contains its complete native explicit result.
+In full mode, each ANCOM-BC2 or DESeq2 contrast contains its complete native
+explicit result. Compact outputs are marked with
+`raw_storage = "compact"` and retain native tables and diagnostics without the
+largest fit objects.
 
 Use the comparison helpers to inspect method-specific standardized values next
 to one another without creating a consensus or ranking. Native effects retain

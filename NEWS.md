@@ -62,6 +62,9 @@
   pair-specific fits, native diagnostics, and ordered multi-method execution.
 * Added raw-output access and descriptive side-by-side DA comparison
   extractors, reports, and CSV export without consensus or method ranking.
+* Added configurable DA native-output retention, optional progress messages,
+  per-contrast timings, compact console reports, and nonzero formatting for
+  very small p-values.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.

@@ -16,12 +16,15 @@ contains one method.}
 \code{x} contains one contrast.}
 }
 \value{
-The selected method-specific raw backend object.
+The selected method-specific full or compact raw backend object.
 }
 \description{
 \code{as_da_raw_output()} provides a stable access path across the different raw
-output nesting used by ALDEx2, ANCOM-BC2, and DESeq2. The returned object is
-not transformed; its structure remains specific to the selected backend.
+output nesting used by ALDEx2, ANCOM-BC2, and DESeq2. With
+\code{raw_storage = "full"}, the complete selected object is returned. With
+\code{"compact"}, the returned method-specific list is marked
+\code{raw_storage = "compact"} and omits large fit/intermediate objects. No raw
+object is available when the analysis used \code{raw_storage = "none"}.
 }
 \examples{
 \dontrun{

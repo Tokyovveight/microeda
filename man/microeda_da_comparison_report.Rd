@@ -40,7 +40,11 @@ methods, or creating consensus calls.
 Unless \code{features} is supplied, feature rows are displayed when at least one
 selected method has a finite native adjusted p-value no greater than
 \code{alpha}. This controls display only and is not a consensus rule. Truncation
-by \code{max_features} preserves the original feature order.
+by \code{max_features} preserves the original feature order. Feature values use
+a compact long layout so method blocks remain readable in a console; the
+wide table returned by \code{\link[=as_da_comparison]{as_da_comparison()}} is unchanged. Very small native
+adjusted p-values use compact scientific notation and are never rounded to
+zero for display.
 }
 \examples{
 \dontrun{
