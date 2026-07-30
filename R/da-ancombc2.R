@@ -8,13 +8,16 @@ da_validate_ancombc2_public_arguments <- function(mc_samples_supplied,
   }
   if (isTRUE(paired.test)) {
     stop(
-      "`paired.test = TRUE` is only supported by the ALDEx2 backend.",
+      "Paired ANCOM-BC2 execution is not implemented; ",
+      "`paired.test = TRUE` can currently be used only when ALDEx2 is the ",
+      "sole requested method.",
       call. = FALSE
     )
   }
   if (!is.null(pair_id)) {
     stop(
-      "`pair_id` is only supported by the paired ALDEx2 backend.",
+      "Paired ANCOM-BC2 execution is not implemented; `pair_id` can ",
+      "currently be supplied only when ALDEx2 is the sole requested method.",
       call. = FALSE
     )
   }
@@ -36,14 +39,13 @@ da_validate_ancombc2_public_arguments <- function(mc_samples_supplied,
   invisible(NULL)
 }
 
-da_run_ancombc2 <- function(context, contrast_row, params) {
+da_run_ancombc2 <- function(context, contrast_row = NULL, params) {
   if (!inherits(context, "microeda_da_context")) {
     stop("`context` must be a microeda_da_context object.", call. = FALSE)
   }
   if (!"ancombc2" %in% context$methods) {
     stop("`context$methods` must include \"ancombc2\".", call. = FALSE)
   }
-  contrast_row <- da_validate_ancombc2_contrast_row(contrast_row)
   if (!da_optional_package_available("ANCOMBC")) {
     stop(
       "`da_run_ancombc2()` requires the optional package `ANCOMBC`. ",
@@ -53,6 +55,101 @@ da_run_ancombc2 <- function(context, contrast_row, params) {
   }
 
   params <- da_validate_ancombc2_params(params)
+  if (!is.null(contrast_row)) {
+    return(da_run_ancombc2_contrast(
+      context = context,
+      contrast_row = contrast_row,
+      params = params
+    ))
+  }
+
+  contrast_plan <- context$contrast_plan
+  if (nrow(contrast_plan) == 1 &&
+      identical(contrast_plan$contrast_type, "explicit")) {
+    return(da_run_ancombc2_contrast(
+      context = context,
+      contrast_row = contrast_plan[1, , drop = FALSE],
+      params = params
+    ))
+  }
+  if (!all(contrast_plan$contrast_type == "pairwise")) {
+    stop(
+      "ANCOM-BC2 supports explicit or pairwise contrast plans only.",
+      call. = FALSE
+    )
+  }
+
+  contrast_results <- lapply(seq_len(nrow(contrast_plan)), function(i) {
+    contrast_row <- contrast_plan[i, , drop = FALSE]
+    tryCatch(
+      da_run_ancombc2_contrast(
+        context = context,
+        contrast_row = contrast_row,
+        params = params
+      ),
+      error = function(e) {
+        stop(
+          "ANCOM-BC2 pairwise execution failed for contrast `",
+          contrast_row$contrast,
+          "`: ",
+          conditionMessage(e),
+          call. = FALSE
+        )
+      }
+    )
+  })
+  contrast_labels <- contrast_plan$contrast
+  names(contrast_results) <- contrast_labels
+
+  results <- do.call(
+    rbind,
+    lapply(contrast_results, function(result) result$results)
+  )
+  row.names(results) <- NULL
+
+  raw_output <- lapply(contrast_results, function(result) result$raw_output)
+  names(raw_output) <- contrast_labels
+
+  note_rows <- lapply(seq_along(contrast_results), function(i) {
+    da_ancombc2_pairwise_notes(
+      notes = contrast_results[[i]]$notes,
+      contrast = contrast_labels[[i]]
+    )
+  })
+  notes <- da_deduplicate_caveats(do.call(rbind, note_rows))
+  contrast_params <- lapply(contrast_results, function(result) result$params)
+  names(contrast_params) <- contrast_labels
+
+  da_backend_result(
+    method = "ancombc2",
+    results = results,
+    raw_output = raw_output,
+    notes = notes,
+    params = list(
+      p_adj_method = params$p_adj_method,
+      contrast_plan = contrast_plan,
+      contrasts = contrast_params
+    )
+  )
+}
+
+da_run_ancombc2_contrast <- function(context, contrast_row, params) {
+  if (!inherits(context, "microeda_da_context")) {
+    stop("`context` must be a microeda_da_context object.", call. = FALSE)
+  }
+  if (!"ancombc2" %in% context$methods) {
+    stop("`context$methods` must include \"ancombc2\".", call. = FALSE)
+  }
+  if (!da_optional_package_available("ANCOMBC")) {
+    stop(
+      "`da_run_ancombc2_contrast()` requires the optional package ",
+      "`ANCOMBC`. Install it with `BiocManager::install(\"ANCOMBC\")`.",
+      call. = FALSE
+    )
+  }
+
+  params <- da_validate_ancombc2_params(params)
+  contrast_row <- da_validate_ancombc2_contrast_row(contrast_row)
   input <- da_prepare_ancombc2_input(context, contrast_row)
   actual_params <- da_ancombc2_call_params(
     group_column = input$backend_group_column,
@@ -173,10 +270,10 @@ da_validate_ancombc2_contrast_row <- function(contrast_row) {
       call. = FALSE
     )
   }
-  if (!identical(as.character(contrast_row$contrast_type), "explicit")) {
+  if (!as.character(contrast_row$contrast_type) %in%
+      c("explicit", "pairwise")) {
     stop(
-      "ANCOM-BC2 currently supports exactly one explicit contrast; ",
-      "pairwise execution is not implemented.",
+      "`contrast_row$contrast_type` must be \"explicit\" or \"pairwise\".",
       call. = FALSE
     )
   }
@@ -566,4 +663,25 @@ da_ancombc2_notes <- function(warnings,
   out <- do.call(rbind, rows)
   row.names(out) <- NULL
   out
+}
+
+da_ancombc2_pairwise_notes <- function(notes, contrast) {
+  if (is.null(notes) || nrow(notes) == 0) {
+    return(da_empty_caveats())
+  }
+
+  method_note <- notes$caveat_id == "ancombc2_compositional_note"
+  contrast_specific <- !method_note
+  notes$caveat_id[contrast_specific] <- paste0(
+    notes$caveat_id[contrast_specific],
+    "_",
+    contrast
+  )
+  notes$message[contrast_specific] <- paste0(
+    "Contrast ",
+    contrast,
+    ": ",
+    notes$message[contrast_specific]
+  )
+  notes
 }

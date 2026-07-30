@@ -1846,22 +1846,10 @@ test_that("write_da_results works for explicit and pairwise DA objects", {
   expect_equal(as_da_results(da_pairwise), pairwise_before)
 })
 
-test_that("microeda_da rejects multi-method, planned, and unknown methods clearly", {
+test_that("microeda_da rejects planned and unknown methods clearly", {
   counts <- da_example_counts()
   metadata <- da_example_metadata(rownames(counts))
 
-  expect_error(
-    microeda_da(
-      counts,
-      metadata = metadata,
-      group = "group",
-      contrast = c("A", "B"),
-      methods = c("aldex2", "ancombc2"),
-      taxa_are_rows = FALSE
-    ),
-    "one method per call",
-    fixed = TRUE
-  )
   expect_error(
     microeda_da(
       counts,
@@ -2080,9 +2068,12 @@ test_that("DA public exports are limited and backend dependencies stay optional"
     "da_run_aldex2_contrast",
     "da_standardize_aldex2_result",
     "da_run_ancombc2",
+    "da_run_ancombc2_contrast",
     "da_standardize_ancombc2_result",
     "da_prepare_ancombc2_input",
+    "da_validate_backend_availability",
     "da_report_contrast_summary",
+    "da_report_method_contrast_lines",
     "da_report_top_rows",
     "da_report_table_lines",
     "da_summary_from_results",
@@ -2110,8 +2101,10 @@ test_that("DA public exports are limited and backend dependencies stay optional"
     "da_run_aldex2_contrast",
     "da_standardize_aldex2_result",
     "da_run_ancombc2",
+    "da_run_ancombc2_contrast",
     "da_standardize_ancombc2_result",
     "da_prepare_ancombc2_input",
+    "da_validate_backend_availability",
     "da_backend_result",
     "da_standardize_backend_result",
     "da_combine_method_results",

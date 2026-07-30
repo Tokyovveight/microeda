@@ -1,9 +1,9 @@
 #' Run exploratory differential representation with ALDEx2 or ANCOM-BC2
 #'
 #' `microeda_da()` runs a cautious differential representation workflow for
-#' microbiome count data. This version supports one method per call: ALDEx2 or
-#' ANCOM-BC2. Results are standardized for downstream use while preserving the
-#' complete raw backend output in the returned object.
+#' microbiome count data. It can run ALDEx2, ANCOM-BC2, or both methods
+#' side-by-side. Results are standardized for downstream use while preserving
+#' each method's complete raw backend output in the returned object.
 #'
 #' This helper is exploratory: it uses method-native p-value adjustment, does
 #' not globally re-adjust backend outputs, does not rank methods, and does not
@@ -14,11 +14,10 @@
 #' @param taxonomy Optional taxonomy table.
 #' @param group Metadata column containing group labels.
 #' @param contrast Either a length-2 character vector of group levels or
-#'   `"pairwise"` to run all pairwise group comparisons with ALDEx2. ANCOM-BC2
-#'   currently requires one explicit length-2 contrast.
-#' @param methods Differential representation method to run. Supported values
-#'   are `"aldex2"` and `"ancombc2"`. Public multi-method dispatch is not yet
-#'   implemented.
+#'   `"pairwise"` to run all pairwise group comparisons as separate explicit
+#'   backend analyses.
+#' @param methods Differential representation methods to run. Supported values
+#'   are `"aldex2"` and `"ancombc2"`. User-supplied method order is preserved.
 #' @param tax_rank Optional taxonomy rank used for `taxon_label`.
 #' @param prevalence_filter Optional filter value recorded for future use.
 #'   This wrapper does not apply filtering.
@@ -53,17 +52,25 @@
 #' never removed silently.
 #'
 #' ANCOM-BC2 is an optional backend and can be installed with
-#' `BiocManager::install("ANCOMBC")`. Its first microeda backend supports one
-#' explicit contrast only. The standardized `effect` and `log_fold_change`
-#' fields retain the native natural-log coefficient for `group2 - group1`:
-#' positive values indicate a higher estimated abundance in `group2`, and
-#' negative values indicate a higher estimated abundance in `group1`. Native
-#' q-values are not adjusted again by microeda. microeda does not filter,
-#' normalize, or round counts before this backend.
+#' `BiocManager::install("ANCOMBC")`. Pairwise requests are executed as
+#' separate explicit primary `res` analyses, not through ANCOM-BC2 `res_pair`.
+#' The standardized `effect` and `log_fold_change` fields retain the native
+#' natural-log coefficient for `group2 - group1`: positive values indicate a
+#' higher estimated abundance in `group2`, and negative values indicate a
+#' higher estimated abundance in `group1`. Native q-values are adjusted within
+#' each method and contrast and are not adjusted again by microeda.
+#'
+#' Multi-method results are descriptive side-by-side sensitivity views.
+#' microeda does not apply cross-method adjustment, consensus calls, voting, or
+#' method ranking. For pairwise runs, raw ANCOM-BC2 outputs are nested by
+#' contrast under `x$raw_outputs$ancombc2`; ALDEx2 retains its existing
+#' pairwise raw-output contract.
 #'
 #' `mc.samples`, `denom`, `paired.test`, and `pair_id` are ALDEx2-specific.
-#' Explicitly supplying `mc.samples` or `denom`, enabling `paired.test`, or
-#' supplying `pair_id` with `methods = "ancombc2"` is rejected.
+#' Explicitly supplying `mc.samples` or `denom` with ANCOM-BC2 alone is
+#' rejected. A multi-method run passes these arguments only to ALDEx2.
+#' `paired.test = TRUE` and `pair_id` are rejected whenever ANCOM-BC2 is
+#' requested because repeated-measures ANCOM-BC2 is not implemented.
 #'
 #' @return A `microeda_da` object containing standardized results, method
 #'   results, preserved raw backend outputs, caveats, and parameters.
@@ -119,15 +126,7 @@ microeda_da <- function(x,
   denom_supplied <- !missing(denom)
   ancombc2_adjustment_supplied <- !missing(ancombc2_p_adj_method)
   methods <- da_validate_methods(methods)
-  if (length(methods) > 1) {
-    stop(
-      "`microeda_da()` currently supports one method per call; ",
-      "public multi-method dispatch is not implemented yet.",
-      call. = FALSE
-    )
-  }
-  method <- methods[[1]]
-  if (identical(method, "deseq2")) {
+  if ("deseq2" %in% methods) {
     stop(
       "`methods = \"deseq2\"` is not implemented in this version of ",
       "`microeda_da()`.",
@@ -135,7 +134,17 @@ microeda_da <- function(x,
     )
   }
 
-  if (identical(method, "aldex2")) {
+  has_aldex2 <- "aldex2" %in% methods
+  has_ancombc2 <- "ancombc2" %in% methods
+  if (has_ancombc2) {
+    da_validate_ancombc2_public_arguments(
+      mc_samples_supplied = mc_samples_supplied && !has_aldex2,
+      denom_supplied = denom_supplied && !has_aldex2,
+      paired.test = paired.test,
+      pair_id = pair_id
+    )
+    pair_id <- NULL
+  } else {
     if (ancombc2_adjustment_supplied) {
       stop(
         "`ancombc2_p_adj_method` can only be supplied when ",
@@ -147,14 +156,6 @@ microeda_da <- function(x,
       pair_id = pair_id,
       paired.test = paired.test
     )
-  } else {
-    da_validate_ancombc2_public_arguments(
-      mc_samples_supplied = mc_samples_supplied,
-      denom_supplied = denom_supplied,
-      paired.test = paired.test,
-      pair_id = pair_id
-    )
-    pair_id <- NULL
   }
 
   context <- da_prepare_context(
@@ -171,32 +172,26 @@ microeda_da <- function(x,
     taxa_are_rows = taxa_are_rows,
     pair_id = pair_id
   )
+  da_validate_backend_availability(methods)
 
-  if (identical(method, "aldex2")) {
-    backend <- da_run_aldex2(
-      context,
-      mc.samples = mc.samples,
-      denom = denom,
-      paired.test = paired.test
+  backend_results <- lapply(methods, function(method) {
+    if (identical(method, "aldex2")) {
+      return(da_run_aldex2(
+        context,
+        mc.samples = mc.samples,
+        denom = denom,
+        paired.test = paired.test
+      ))
+    }
+
+    da_run_ancombc2(
+      context = context,
+      params = list(p_adj_method = ancombc2_p_adj_method)
     )
-    return(da_build_result_object(context, list(aldex2 = backend)))
-  }
+  })
+  names(backend_results) <- methods
 
-  if (nrow(context$contrast_plan) != 1 ||
-      !identical(context$contrast_plan$contrast_type, "explicit")) {
-    stop(
-      "ANCOM-BC2 currently supports exactly one explicit contrast; ",
-      "`contrast = \"pairwise\"` is not implemented.",
-      call. = FALSE
-    )
-  }
-
-  backend <- da_run_ancombc2(
-    context = context,
-    contrast_row = context$contrast_plan[1, , drop = FALSE],
-    params = list(p_adj_method = ancombc2_p_adj_method)
-  )
-  da_build_result_object(context, list(ancombc2 = backend))
+  da_build_result_object(context, backend_results)
 }
 
 #' Extract standardized differential representation results
@@ -287,8 +282,9 @@ as_da_summary <- function(x, alpha = 0.05) {
 #' claim confirmed biological discoveries.
 #'
 #' @param x A `microeda_da` object.
-#' @param top_n Number of top standardized rows to show after sorting by
-#'   `p_adjusted` ascending with missing values last. Use `0` to omit top rows.
+#' @param top_n Number of top standardized rows to show per method and contrast
+#'   after sorting by `p_adjusted` ascending with missing values last. Use `0`
+#'   to omit top rows.
 #' @param alpha Adjusted p-value threshold used for per-contrast counts.
 #' @param digits Number of digits used for numeric report values.
 #'
@@ -364,6 +360,10 @@ microeda_da_report <- function(x, top_n = 10, alpha = 0.05, digits = 3) {
     paste(
       "Backend-native/method-specific adjustment is used;",
       "microeda does not globally re-adjust backend outputs."
+    ),
+    paste(
+      "Methods are shown as side-by-side sensitivity views;",
+      "the report does not create a consensus or rank methods."
     )
   )
 
@@ -388,7 +388,7 @@ microeda_da_report <- function(x, top_n = 10, alpha = 0.05, digits = 3) {
   lines <- c(
     lines,
     "",
-    "Per-contrast summary:"
+    "Method-by-contrast summary:"
   )
 
   lines <- c(
@@ -398,34 +398,18 @@ microeda_da_report <- function(x, top_n = 10, alpha = 0.05, digits = 3) {
       digits = digits
     ),
     "",
-    "Top standardized rows by adjusted p-value:"
+    "Method-by-contrast details:"
   )
 
-  if (top_n == 0L) {
-    lines <- c(lines, "No top rows requested.")
-  } else {
-    top_rows <- da_report_top_rows(results, top_n = top_n)
-    lines <- c(
-      lines,
-      da_report_table_lines(
-        top_rows[
-          ,
-          c(
-            "method",
-            "contrast",
-            "feature_id",
-            "taxon_label",
-            "effect",
-            "p_value",
-            "p_adjusted",
-            "significance"
-          ),
-          drop = FALSE
-        ],
-        digits = digits
-      )
+  lines <- c(
+    lines,
+    da_report_method_contrast_lines(
+      results = results,
+      top_n = top_n,
+      alpha = alpha,
+      digits = digits
     )
-  }
+  )
 
   lines <- c(
     lines,
@@ -1531,6 +1515,28 @@ da_optional_package_available <- function(package) {
   requireNamespace(package, quietly = TRUE)
 }
 
+da_validate_backend_availability <- function(methods) {
+  if ("aldex2" %in% methods &&
+      !da_optional_package_available("ALDEx2")) {
+    stop(
+      "`microeda_da()` requires the optional package `ALDEx2` for ",
+      "`methods = \"aldex2\"`.",
+      call. = FALSE
+    )
+  }
+  if ("ancombc2" %in% methods &&
+      !da_optional_package_available("ANCOMBC")) {
+    stop(
+      "`microeda_da()` requires the optional package `ANCOMBC` for ",
+      "`methods = \"ancombc2\"`. Install it with ",
+      "`BiocManager::install(\"ANCOMBC\")`.",
+      call. = FALSE
+    )
+  }
+
+  invisible(methods)
+}
+
 da_context_caveats <- function(counts,
                                group_values,
                                contrast_plan,
@@ -1827,6 +1833,7 @@ da_recycle_result_value <- function(value, n, column) {
 
 da_report_contrast_summary <- function(results, alpha) {
   out <- data.frame(
+    method = character(),
     contrast = character(),
     tested_features = integer(),
     p_adjusted_le_alpha = integer(),
@@ -1838,10 +1845,16 @@ da_report_contrast_summary <- function(results, alpha) {
     return(out)
   }
 
-  contrast_values <- unique(results$contrast)
-  rows <- lapply(contrast_values, function(contrast) {
-    rows <- results[results$contrast == contrast, , drop = FALSE]
-    p_adjusted <- rows$p_adjusted
+  keys <- unique(results[c("method", "contrast")])
+  rows <- lapply(seq_len(nrow(keys)), function(i) {
+    method <- keys$method[[i]]
+    contrast <- keys$contrast[[i]]
+    result_rows <- results[
+      results$method == method & results$contrast == contrast,
+      ,
+      drop = FALSE
+    ]
+    p_adjusted <- result_rows$p_adjusted
     p_adjusted_present <- !is.na(p_adjusted)
     min_p_adjusted <- if (any(p_adjusted_present)) {
       min(p_adjusted[p_adjusted_present])
@@ -1850,8 +1863,9 @@ da_report_contrast_summary <- function(results, alpha) {
     }
 
     data.frame(
+      method = method,
       contrast = contrast,
-      tested_features = length(unique(rows$feature_id)),
+      tested_features = length(unique(result_rows$feature_id)),
       p_adjusted_le_alpha = sum(p_adjusted_present & p_adjusted <= alpha),
       min_p_adjusted = min_p_adjusted,
       stringsAsFactors = FALSE
@@ -1974,6 +1988,92 @@ da_report_top_rows <- function(results, top_n) {
   order_index <- order(is.na(results$p_adjusted), results$p_adjusted)
   sorted <- results[order_index, , drop = FALSE]
   sorted[seq_len(min(top_n, nrow(sorted))), , drop = FALSE]
+}
+
+da_report_method_contrast_lines <- function(results,
+                                            top_n,
+                                            alpha,
+                                            digits) {
+  if (nrow(results) == 0) {
+    return("No method-by-contrast results available.")
+  }
+
+  keys <- unique(results[c("method", "contrast")])
+  blocks <- lapply(seq_len(nrow(keys)), function(i) {
+    method <- keys$method[[i]]
+    contrast <- keys$contrast[[i]]
+    rows <- results[
+      results$method == method & results$contrast == contrast,
+      ,
+      drop = FALSE
+    ]
+    summary <- da_summary_row(rows, alpha = alpha)
+    method_note <- da_summary_collapse_unique(rows$method_note)
+    adjustment <- paste0(
+      da_summary_collapse_unique(rows$p_adjust_method),
+      " (scope: ",
+      da_summary_collapse_unique(rows$p_adjust_scope),
+      ")"
+    )
+    alpha_label <- da_report_number(alpha, digits = digits)
+    min_adjusted <- da_report_number(
+      summary$min_p_adjusted,
+      digits = digits
+    )
+
+    block <- c(
+      "-----------------------------------------",
+      paste0("Method: ", method),
+      paste0(
+        "Contrast: ",
+        contrast,
+        " (",
+        summary$group1,
+        " vs ",
+        summary$group2,
+        ")"
+      ),
+      paste0("Native adjustment: ", adjustment),
+      paste0(
+        "Tested features: ",
+        summary$tested_features,
+        "; adjusted p <= ",
+        alpha_label,
+        ": ",
+        summary$n_p_adjusted_le_alpha,
+        "; minimum adjusted p: ",
+        min_adjusted
+      ),
+      paste0("Effect semantics: ", method_note),
+      "Top standardized rows by adjusted p-value:"
+    )
+
+    if (top_n == 0L) {
+      return(c(block, "No top rows requested."))
+    }
+
+    top_rows <- da_report_top_rows(rows, top_n = top_n)
+    c(
+      block,
+      da_report_table_lines(
+        top_rows[
+          ,
+          c(
+            "feature_id",
+            "taxon_label",
+            "effect",
+            "p_value",
+            "p_adjusted",
+            "significance"
+          ),
+          drop = FALSE
+        ],
+        digits = digits
+      )
+    )
+  })
+
+  unlist(blocks, use.names = FALSE)
 }
 
 da_report_table_lines <- function(data, digits) {

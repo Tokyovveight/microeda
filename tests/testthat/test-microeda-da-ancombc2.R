@@ -20,6 +20,52 @@ da_ancombc2_metadata <- function(sample_ids = NULL) {
   metadata[sample_ids, , drop = FALSE]
 }
 
+da_ancombc2_pairwise_counts <- function() {
+  counts <- t(rbind(
+    F_A = c(
+      310, 300, 320, 305, 315, 295,
+      20, 22, 18, 21, 19, 23,
+      18, 20, 19, 21, 17, 22
+    ),
+    F_B = c(
+      18, 20, 22, 19, 21, 17,
+      300, 310, 295, 305, 315, 290,
+      20, 19, 21, 18, 22, 17
+    ),
+    F_C = c(
+      20, 18, 21, 19, 22, 17,
+      19, 21, 18, 22, 17, 20,
+      305, 315, 295, 310, 300, 320
+    ),
+    F_stable = c(
+      100, 98, 102, 101, 99, 103,
+      100, 102, 98, 101, 99, 103,
+      101, 99, 103, 100, 102, 98
+    )
+  ))
+  rownames(counts) <- c(
+    paste0("A", seq_len(6)),
+    paste0("B", seq_len(6)),
+    paste0("C", seq_len(6))
+  )
+  counts
+}
+
+da_ancombc2_pairwise_metadata <- function(sample_ids = NULL) {
+  metadata <- data.frame(
+    group = rep(c("A", "B", "C"), each = 6),
+    row.names = c(
+      paste0("A", seq_len(6)),
+      paste0("B", seq_len(6)),
+      paste0("C", seq_len(6))
+    )
+  )
+  if (is.null(sample_ids)) {
+    return(metadata)
+  }
+  metadata[sample_ids, , drop = FALSE]
+}
+
 da_ancombc2_taxonomy <- function() {
   data.frame(
     Genus = c("Genus A", "Genus B", "Stable genus", "Other genus"),
@@ -42,6 +88,18 @@ da_ancombc2_context <- function(counts = da_ancombc2_counts(),
     contrast = c("A", "B"),
     methods = "ancombc2",
     tax_rank = "Genus",
+    taxa_are_rows = FALSE
+  )
+}
+
+da_ancombc2_pairwise_context <- function() {
+  counts <- da_ancombc2_pairwise_counts()
+  microeda:::da_prepare_context(
+    counts,
+    metadata = da_ancombc2_pairwise_metadata(rownames(counts)),
+    group = "group",
+    contrast = "pairwise",
+    methods = "ancombc2",
     taxa_are_rows = FALSE
   )
 }
@@ -119,34 +177,12 @@ test_that("microeda_da validates ANCOM-BC2 dispatch boundaries", {
       counts,
       metadata = metadata,
       group = "group",
-      contrast = "pairwise",
-      methods = "ancombc2",
-      taxa_are_rows = FALSE
-    ),
-    "exactly one explicit contrast"
-  )
-  expect_error(
-    microeda_da(
-      counts,
-      metadata = metadata,
-      group = "group",
-      contrast = c("A", "B"),
-      methods = c("aldex2", "ancombc2"),
-      taxa_are_rows = FALSE
-    ),
-    "one method per call"
-  )
-  expect_error(
-    microeda_da(
-      counts,
-      metadata = metadata,
-      group = "group",
       contrast = c("A", "B"),
       methods = "ancombc2",
       taxa_are_rows = FALSE,
       paired.test = TRUE
     ),
-    "only supported by the ALDEx2 backend"
+    "Paired ANCOM-BC2 execution is not implemented"
   )
   expect_error(
     microeda_da(
@@ -158,7 +194,7 @@ test_that("microeda_da validates ANCOM-BC2 dispatch boundaries", {
       taxa_are_rows = FALSE,
       pair_id = "pair"
     ),
-    "only supported by the paired ALDEx2 backend"
+    "Paired ANCOM-BC2 execution is not implemented"
   )
   expect_error(
     microeda_da(
@@ -527,6 +563,132 @@ test_that("ANCOM-BC2 runner preserves native output and captures diagnostics", {
   )
 })
 
+test_that("ANCOM-BC2 pairwise runs explicit primary analyses in plan order", {
+  context <- da_ancombc2_pairwise_context()
+  seen_contrasts <- character()
+
+  testthat::local_mocked_bindings(
+    da_optional_package_available = function(package) TRUE,
+    da_call_ancombc2 = function(data, meta_data, params) {
+      factor_levels <- levels(meta_data[[params$fix_formula]])
+      seen_contrasts <<- c(
+        seen_contrasts,
+        paste0(factor_levels[1], "_vs_", factor_levels[2])
+      )
+      da_ancombc2_fake_native(data, meta_data, params)
+    },
+    da_ancombc2_package_version = function() "2.14.0",
+    .package = "microeda"
+  )
+  backend <- microeda:::da_run_ancombc2(
+    context,
+    params = list(p_adj_method = "holm")
+  )
+
+  expected <- c("A_vs_B", "A_vs_C", "B_vs_C")
+  expect_s3_class(backend, "microeda_da_backend_result")
+  expect_equal(seen_contrasts, expected)
+  expect_equal(unique(backend$results$contrast), expected)
+  expect_equal(
+    as.integer(table(factor(
+      backend$results$contrast,
+      levels = expected
+    ))),
+    rep(ncol(context$counts), 3L)
+  )
+  expect_named(backend$raw_output, expected)
+  expect_named(backend$params$contrasts, expected)
+  expect_equal(backend$params$p_adj_method, "holm")
+  expect_equal(backend$params$contrast_plan$contrast, expected)
+
+  for (i in seq_along(expected)) {
+    contrast <- expected[[i]]
+    raw <- backend$raw_output[[contrast]]
+    contrast_row <- context$contrast_plan[i, , drop = FALSE]
+
+    expect_named(
+      raw,
+      c(
+        "native_result",
+        "res",
+        "res_global",
+        "res_pair",
+        "res_dunn",
+        "res_trend",
+        "zero_ind",
+        "ss_tab",
+        "coefficient",
+        "reference_level",
+        "factor_levels",
+        "original_conditions",
+        "backend_conditions",
+        "sample_order",
+        "feature_order",
+        "backend_excluded_features",
+        "backend_excluded_feature_count",
+        "contrast_row",
+        "input_orientation",
+        "transposed_from_context",
+        "backend_group_column",
+        "inert_metadata_column",
+        "backend_metadata",
+        "params",
+        "warnings",
+        "messages",
+        "package_version"
+      )
+    )
+    expect_equal(raw$reference_level, contrast_row$group1)
+    expect_equal(
+      raw$factor_levels,
+      c(contrast_row$group1, contrast_row$group2)
+    )
+    expect_equal(raw$contrast_row$contrast, contrast)
+    expect_false(raw$params$pairwise)
+    expect_null(raw$res_pair)
+    result_rows <- backend$results[
+      backend$results$contrast == contrast,
+      ,
+      drop = FALSE
+    ]
+    expect_identical(
+      result_rows$p_adjusted,
+      raw$res[[paste0("q_", raw$coefficient)]]
+    )
+    expect_true(all(result_rows$p_adjust_scope == "method_contrast"))
+  }
+})
+
+test_that("ANCOM-BC2 pairwise errors identify the failing contrast", {
+  context <- da_ancombc2_pairwise_context()
+  seen_contrasts <- character()
+
+  testthat::local_mocked_bindings(
+    da_optional_package_available = function(package) TRUE,
+    da_call_ancombc2 = function(data, meta_data, params) {
+      factor_levels <- levels(meta_data[[params$fix_formula]])
+      contrast <- paste0(factor_levels[1], "_vs_", factor_levels[2])
+      seen_contrasts <<- c(seen_contrasts, contrast)
+      if (identical(contrast, "A_vs_C")) {
+        stop("fixture failure", call. = FALSE)
+      }
+      da_ancombc2_fake_native(data, meta_data, params)
+    },
+    da_ancombc2_package_version = function() "2.14.0",
+    .package = "microeda"
+  )
+
+  expect_error(
+    microeda:::da_run_ancombc2(
+      context,
+      params = list(p_adj_method = "holm")
+    ),
+    "ANCOM-BC2 pairwise execution failed for contrast `A_vs_C`",
+    fixed = TRUE
+  )
+  expect_equal(seen_contrasts, c("A_vs_B", "A_vs_C"))
+})
+
 test_that("ANCOM-BC2 works with DA summary, report, writer, and print", {
   context <- da_ancombc2_context()
   contrast_row <- context$contrast_plan[1, , drop = FALSE]
@@ -667,4 +829,56 @@ test_that("real ANCOM-BC2 explicit backend preserves sign and schema", {
     levels(reversed$raw_outputs$ancombc2$backend_conditions),
     c("B", "A")
   )
+})
+
+test_that("real ANCOM-BC2 pairwise backend runs three primary contrasts", {
+  skip_if_not_installed("ANCOMBC")
+
+  counts <- da_ancombc2_pairwise_counts()
+  metadata <- da_ancombc2_pairwise_metadata(rownames(counts))
+  set.seed(1)
+  expect_silent(
+    da <- microeda_da(
+      counts,
+      metadata = metadata,
+      group = "group",
+      contrast = "pairwise",
+      methods = "ancombc2",
+      taxa_are_rows = FALSE,
+      ancombc2_p_adj_method = "holm"
+    )
+  )
+
+  expected <- c("A_vs_B", "A_vs_C", "B_vs_C")
+  results <- as_da_results(da)
+  expect_equal(unique(results$contrast), expected)
+  expect_equal(
+    as.integer(table(factor(results$contrast, levels = expected))),
+    rep(ncol(counts), 3L)
+  )
+  expect_named(da$raw_outputs$ancombc2, expected)
+
+  expected_signs <- list(
+    A_vs_B = c(F_A = -1, F_B = 1),
+    A_vs_C = c(F_A = -1, F_C = 1),
+    B_vs_C = c(F_B = -1, F_C = 1)
+  )
+  for (contrast in expected) {
+    raw <- da$raw_outputs$ancombc2[[contrast]]
+    contrast_rows <- results[results$contrast == contrast, , drop = FALSE]
+    signs <- expected_signs[[contrast]]
+
+    expect_equal(
+      sign(contrast_rows$effect[
+        match(names(signs), contrast_rows$feature_id)
+      ]),
+      unname(signs)
+    )
+    expect_identical(
+      contrast_rows$p_adjusted,
+      raw$res[[paste0("q_", raw$coefficient)]]
+    )
+    expect_false(raw$params$pairwise)
+    expect_null(raw$res_pair)
+  }
 })

@@ -33,12 +33,11 @@ microeda_da(
 \item{group}{Metadata column containing group labels.}
 
 \item{contrast}{Either a length-2 character vector of group levels or
-\code{"pairwise"} to run all pairwise group comparisons with ALDEx2. ANCOM-BC2
-currently requires one explicit length-2 contrast.}
+\code{"pairwise"} to run all pairwise group comparisons as separate explicit
+backend analyses.}
 
-\item{methods}{Differential representation method to run. Supported values
-are \code{"aldex2"} and \code{"ancombc2"}. Public multi-method dispatch is not yet
-implemented.}
+\item{methods}{Differential representation methods to run. Supported values
+are \code{"aldex2"} and \code{"ancombc2"}. User-supplied method order is preserved.}
 
 \item{tax_rank}{Optional taxonomy rank used for \code{taxon_label}.}
 
@@ -75,9 +74,9 @@ results, preserved raw backend outputs, caveats, and parameters.
 }
 \description{
 \code{microeda_da()} runs a cautious differential representation workflow for
-microbiome count data. This version supports one method per call: ALDEx2 or
-ANCOM-BC2. Results are standardized for downstream use while preserving the
-complete raw backend output in the returned object.
+microbiome count data. It can run ALDEx2, ANCOM-BC2, or both methods
+side-by-side. Results are standardized for downstream use while preserving
+each method's complete raw backend output in the returned object.
 }
 \details{
 This helper is exploratory: it uses method-native p-value adjustment, does
@@ -97,17 +96,25 @@ same pair order. Incomplete or ambiguous pairs cause an error; samples are
 never removed silently.
 
 ANCOM-BC2 is an optional backend and can be installed with
-\code{BiocManager::install("ANCOMBC")}. Its first microeda backend supports one
-explicit contrast only. The standardized \code{effect} and \code{log_fold_change}
-fields retain the native natural-log coefficient for \code{group2 - group1}:
-positive values indicate a higher estimated abundance in \code{group2}, and
-negative values indicate a higher estimated abundance in \code{group1}. Native
-q-values are not adjusted again by microeda. microeda does not filter,
-normalize, or round counts before this backend.
+\code{BiocManager::install("ANCOMBC")}. Pairwise requests are executed as
+separate explicit primary \code{res} analyses, not through ANCOM-BC2 \code{res_pair}.
+The standardized \code{effect} and \code{log_fold_change} fields retain the native
+natural-log coefficient for \code{group2 - group1}: positive values indicate a
+higher estimated abundance in \code{group2}, and negative values indicate a
+higher estimated abundance in \code{group1}. Native q-values are adjusted within
+each method and contrast and are not adjusted again by microeda.
+
+Multi-method results are descriptive side-by-side sensitivity views.
+microeda does not apply cross-method adjustment, consensus calls, voting, or
+method ranking. For pairwise runs, raw ANCOM-BC2 outputs are nested by
+contrast under \code{x$raw_outputs$ancombc2}; ALDEx2 retains its existing
+pairwise raw-output contract.
 
 \code{mc.samples}, \code{denom}, \code{paired.test}, and \code{pair_id} are ALDEx2-specific.
-Explicitly supplying \code{mc.samples} or \code{denom}, enabling \code{paired.test}, or
-supplying \code{pair_id} with \code{methods = "ancombc2"} is rejected.
+Explicitly supplying \code{mc.samples} or \code{denom} with ANCOM-BC2 alone is
+rejected. A multi-method run passes these arguments only to ALDEx2.
+\code{paired.test = TRUE} and \code{pair_id} are rejected whenever ANCOM-BC2 is
+requested because repeated-measures ANCOM-BC2 is not implemented.
 }
 \examples{
 counts <- matrix(

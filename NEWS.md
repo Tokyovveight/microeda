@@ -56,6 +56,8 @@
   small-group caveats.
 * Added an optional ANCOM-BC2 backend for one explicit `microeda_da()` contrast,
   with native natural-log coefficients, q-values, and complete raw output.
+* Added ordered ALDEx2/ANCOM-BC2 multi-method DA workflows and ANCOM-BC2
+  pairwise execution through separate explicit primary contrasts.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.

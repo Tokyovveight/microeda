@@ -22,9 +22,9 @@ The core idea is deliberately conservative:
 PERMANOVA-style beta group testing is available when the optional `vegan`
 package is installed and is reported together with dispersion diagnostics.
 ALDEx2- and ANCOM-BC2-based exploratory differential representation is
-available when the corresponding optional package is installed. ANCOM-BC2
-currently supports one explicit contrast. DESeq2, cross-method dispatch, and
-formal method ranking are not implemented yet.
+available when the corresponding optional package is installed. The methods
+can be run separately or side-by-side over explicit or pairwise contrasts.
+DESeq2 and formal method ranking are not implemented yet.
 
 ## First Workflow
 
@@ -276,13 +276,16 @@ if (requireNamespace("ALDEx2", quietly = TRUE)) {
 ```
 
 This workflow does not rank methods or claim ground-truth differentially
-abundant taxa. Public multi-method dispatch and DESeq2 are planned for later
-slices.
+abundant taxa. Adjusted p-values remain method-native and scoped to each
+method and contrast; microeda does not apply cross-method adjustment or create
+consensus calls.
 
 ANCOM-BC2 is optional and can be installed with
 `BiocManager::install("ANCOMBC")`. Its current backend accepts one explicit
-contrast, does not filter or round counts, and reports the native natural-log
-coefficient as `group2 - group1`. Native q-values are not adjusted again.
+contrast at a time, does not filter or round counts, and reports the native
+natural-log coefficient as `group2 - group1`. A pairwise request runs these
+explicit primary analyses sequentially and does not use `res_pair`. Native
+q-values are not adjusted again.
 
 ```r
 if (requireNamespace("ANCOMBC", quietly = TRUE)) {
@@ -302,9 +305,43 @@ if (requireNamespace("ANCOMBC", quietly = TRUE)) {
 }
 ```
 
+When both optional packages are installed, the same contrast plan can be
+evaluated side-by-side. The standardized rows retain method-specific effect
+semantics and follow method order, then contrast order.
+
+```r
+if (requireNamespace("ALDEx2", quietly = TRUE) &&
+    requireNamespace("ANCOMBC", quietly = TRUE)) {
+  da_multi <- microeda_da(
+    counts,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    group = "group",
+    contrast = "pairwise",
+    methods = c("aldex2", "ancombc2"),
+    tax_rank = "Genus",
+    taxa_are_rows = FALSE,
+    mc.samples = 128,
+    ancombc2_p_adj_method = "holm"
+  )
+  cat(microeda_da_report(da_multi))
+  results <- as_da_results(da_multi)
+  summary <- as_da_summary(da_multi)
+  write_da_results(da_multi, "microeda_da_results.csv")
+}
+```
+
+Raw outputs remain separate. Explicit runs use
+`da$raw_outputs$aldex2` or `da$raw_outputs$ancombc2`. For pairwise runs,
+ALDEx2 retains `da$raw_outputs$aldex2$contrasts$A_vs_B`, while ANCOM-BC2 uses
+`da$raw_outputs$ancombc2$A_vs_B`; each ANCOM-BC2 contrast contains the complete
+native explicit result.
+
 For matched samples, identify pairs explicitly. microeda validates each
 contrast independently and never infers pairs from sample order. Native ALDEx2
-effect values are oriented as `group2 - group1`.
+effect values are oriented as `group2 - group1`. Paired execution currently
+requires ALDEx2 to be the only requested method because repeated-measures
+ANCOM-BC2 is not implemented.
 
 ```r
 metadata_paired <- metadata

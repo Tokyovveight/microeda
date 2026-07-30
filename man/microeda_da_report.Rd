@@ -9,8 +9,9 @@ microeda_da_report(x, top_n = 10, alpha = 0.05, digits = 3)
 \arguments{
 \item{x}{A \code{microeda_da} object.}
 
-\item{top_n}{Number of top standardized rows to show after sorting by
-\code{p_adjusted} ascending with missing values last. Use \code{0} to omit top rows.}
+\item{top_n}{Number of top standardized rows to show per method and contrast
+after sorting by \code{p_adjusted} ascending with missing values last. Use \code{0}
+to omit top rows.}
 
 \item{alpha}{Adjusted p-value threshold used for per-contrast counts.}
 
