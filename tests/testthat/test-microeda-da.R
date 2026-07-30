@@ -1846,7 +1846,7 @@ test_that("write_da_results works for explicit and pairwise DA objects", {
   expect_equal(as_da_results(da_pairwise), pairwise_before)
 })
 
-test_that("microeda_da rejects planned and unknown methods clearly", {
+test_that("microeda_da rejects multi-method, planned, and unknown methods clearly", {
   counts <- da_example_counts()
   metadata <- da_example_metadata(rownames(counts))
 
@@ -1859,7 +1859,7 @@ test_that("microeda_da rejects planned and unknown methods clearly", {
       methods = c("aldex2", "ancombc2"),
       taxa_are_rows = FALSE
     ),
-    "Only methods = \"aldex2\" is implemented",
+    "one method per call",
     fixed = TRUE
   )
   expect_error(
@@ -1871,7 +1871,7 @@ test_that("microeda_da rejects planned and unknown methods clearly", {
       methods = "deseq2",
       taxa_are_rows = FALSE
     ),
-    "Only methods = \"aldex2\" is implemented",
+    "deseq2",
     fixed = TRUE
   )
   expect_error(
@@ -2079,6 +2079,9 @@ test_that("DA public exports are limited and backend dependencies stay optional"
     "da_run_aldex2",
     "da_run_aldex2_contrast",
     "da_standardize_aldex2_result",
+    "da_run_ancombc2",
+    "da_standardize_ancombc2_result",
+    "da_prepare_ancombc2_input",
     "da_report_contrast_summary",
     "da_report_top_rows",
     "da_report_table_lines",
@@ -2092,7 +2095,8 @@ test_that("DA public exports are limited and backend dependencies stay optional"
   dependency_text <- paste(imports, suggests, collapse = ",")
   expect_false(grepl("\\bALDEx2\\b", imports))
   expect_true(grepl("\\bALDEx2\\b", suggests))
-  expect_false(grepl("\\bANCOMBC\\b", dependency_text))
+  expect_false(grepl("\\bANCOMBC\\b", imports))
+  expect_true(grepl("\\bANCOMBC\\b", suggests))
   expect_false(grepl("\\bDESeq2\\b", dependency_text))
 
   da_function_names <- c(
@@ -2105,6 +2109,9 @@ test_that("DA public exports are limited and backend dependencies stay optional"
     "da_run_aldex2",
     "da_run_aldex2_contrast",
     "da_standardize_aldex2_result",
+    "da_run_ancombc2",
+    "da_standardize_ancombc2_result",
+    "da_prepare_ancombc2_input",
     "da_backend_result",
     "da_standardize_backend_result",
     "da_combine_method_results",

@@ -2,7 +2,7 @@
 % Please edit documentation in R/da.R
 \name{microeda_da}
 \alias{microeda_da}
-\title{Run exploratory differential representation with ALDEx2}
+\title{Run exploratory differential representation with ALDEx2 or ANCOM-BC2}
 \usage{
 microeda_da(
   x,
@@ -19,7 +19,8 @@ microeda_da(
   mc.samples = 128,
   denom = "all",
   paired.test = FALSE,
-  pair_id = NULL
+  pair_id = NULL,
+  ancombc2_p_adj_method = "holm"
 )
 }
 \arguments{
@@ -32,10 +33,12 @@ microeda_da(
 \item{group}{Metadata column containing group labels.}
 
 \item{contrast}{Either a length-2 character vector of group levels or
-\code{"pairwise"} to run all pairwise group comparisons.}
+\code{"pairwise"} to run all pairwise group comparisons with ALDEx2. ANCOM-BC2
+currently requires one explicit length-2 contrast.}
 
-\item{methods}{Differential representation methods to run. Only
-\code{"aldex2"} is implemented in this version.}
+\item{methods}{Differential representation method to run. Supported values
+are \code{"aldex2"} and \code{"ancombc2"}. Public multi-method dispatch is not yet
+implemented.}
 
 \item{tax_rank}{Optional taxonomy rank used for \code{taxon_label}.}
 
@@ -61,6 +64,10 @@ rows.}
 Required when \code{paired.test = TRUE} and rejected otherwise. Within every
 analyzed contrast, each pair must contain exactly one \code{group1} sample and
 one \code{group2} sample.}
+
+\item{ancombc2_p_adj_method}{Native p-value adjustment method passed directly
+to \code{ANCOMBC::ancombc2()}. The default is \code{"holm"}. This argument does not
+cause additional adjustment by microeda.}
 }
 \value{
 A \code{microeda_da} object containing standardized results, method
@@ -68,9 +75,9 @@ results, preserved raw backend outputs, caveats, and parameters.
 }
 \description{
 \code{microeda_da()} runs a cautious differential representation workflow for
-microbiome count data. In this version, the only implemented backend is
-ALDEx2. Results are standardized for downstream use while preserving the raw
-backend output in the returned object.
+microbiome count data. This version supports one method per call: ALDEx2 or
+ANCOM-BC2. Results are standardized for downstream use while preserving the
+complete raw backend output in the returned object.
 }
 \details{
 This helper is exploratory: it uses method-native p-value adjustment, does
@@ -88,6 +95,19 @@ every contrast. Pairs are ordered deterministically by their character
 labels, with the \code{group1} and \code{group2} sample blocks passed to ALDEx2 in the
 same pair order. Incomplete or ambiguous pairs cause an error; samples are
 never removed silently.
+
+ANCOM-BC2 is an optional backend and can be installed with
+\code{BiocManager::install("ANCOMBC")}. Its first microeda backend supports one
+explicit contrast only. The standardized \code{effect} and \code{log_fold_change}
+fields retain the native natural-log coefficient for \code{group2 - group1}:
+positive values indicate a higher estimated abundance in \code{group2}, and
+negative values indicate a higher estimated abundance in \code{group1}. Native
+q-values are not adjusted again by microeda. microeda does not filter,
+normalize, or round counts before this backend.
+
+\code{mc.samples}, \code{denom}, \code{paired.test}, and \code{pair_id} are ALDEx2-specific.
+Explicitly supplying \code{mc.samples} or \code{denom}, enabling \code{paired.test}, or
+supplying \code{pair_id} with \code{methods = "ancombc2"} is rejected.
 }
 \examples{
 counts <- matrix(

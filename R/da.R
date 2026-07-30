@@ -1,9 +1,9 @@
-#' Run exploratory differential representation with ALDEx2
+#' Run exploratory differential representation with ALDEx2 or ANCOM-BC2
 #'
 #' `microeda_da()` runs a cautious differential representation workflow for
-#' microbiome count data. In this version, the only implemented backend is
-#' ALDEx2. Results are standardized for downstream use while preserving the raw
-#' backend output in the returned object.
+#' microbiome count data. This version supports one method per call: ALDEx2 or
+#' ANCOM-BC2. Results are standardized for downstream use while preserving the
+#' complete raw backend output in the returned object.
 #'
 #' This helper is exploratory: it uses method-native p-value adjustment, does
 #' not globally re-adjust backend outputs, does not rank methods, and does not
@@ -14,9 +14,11 @@
 #' @param taxonomy Optional taxonomy table.
 #' @param group Metadata column containing group labels.
 #' @param contrast Either a length-2 character vector of group levels or
-#'   `"pairwise"` to run all pairwise group comparisons.
-#' @param methods Differential representation methods to run. Only
-#'   `"aldex2"` is implemented in this version.
+#'   `"pairwise"` to run all pairwise group comparisons with ALDEx2. ANCOM-BC2
+#'   currently requires one explicit length-2 contrast.
+#' @param methods Differential representation method to run. Supported values
+#'   are `"aldex2"` and `"ancombc2"`. Public multi-method dispatch is not yet
+#'   implemented.
 #' @param tax_rank Optional taxonomy rank used for `taxon_label`.
 #' @param prevalence_filter Optional filter value recorded for future use.
 #'   This wrapper does not apply filtering.
@@ -33,6 +35,9 @@
 #'   Required when `paired.test = TRUE` and rejected otherwise. Within every
 #'   analyzed contrast, each pair must contain exactly one `group1` sample and
 #'   one `group2` sample.
+#' @param ancombc2_p_adj_method Native p-value adjustment method passed directly
+#'   to `ANCOMBC::ancombc2()`. The default is `"holm"`. This argument does not
+#'   cause additional adjustment by microeda.
 #'
 #' @details
 #' For ALDEx2 results, `effect` retains the native ALDEx2 effect size. microeda
@@ -46,6 +51,19 @@
 #' labels, with the `group1` and `group2` sample blocks passed to ALDEx2 in the
 #' same pair order. Incomplete or ambiguous pairs cause an error; samples are
 #' never removed silently.
+#'
+#' ANCOM-BC2 is an optional backend and can be installed with
+#' `BiocManager::install("ANCOMBC")`. Its first microeda backend supports one
+#' explicit contrast only. The standardized `effect` and `log_fold_change`
+#' fields retain the native natural-log coefficient for `group2 - group1`:
+#' positive values indicate a higher estimated abundance in `group2`, and
+#' negative values indicate a higher estimated abundance in `group1`. Native
+#' q-values are not adjusted again by microeda. microeda does not filter,
+#' normalize, or round counts before this backend.
+#'
+#' `mc.samples`, `denom`, `paired.test`, and `pair_id` are ALDEx2-specific.
+#' Explicitly supplying `mc.samples` or `denom`, enabling `paired.test`, or
+#' supplying `pair_id` with `methods = "ancombc2"` is rejected.
 #'
 #' @return A `microeda_da` object containing standardized results, method
 #'   results, preserved raw backend outputs, caveats, and parameters.
@@ -95,21 +113,49 @@ microeda_da <- function(x,
                         mc.samples = 128,
                         denom = "all",
                         paired.test = FALSE,
-                        pair_id = NULL) {
+                        pair_id = NULL,
+                        ancombc2_p_adj_method = "holm") {
+  mc_samples_supplied <- !missing(mc.samples)
+  denom_supplied <- !missing(denom)
+  ancombc2_adjustment_supplied <- !missing(ancombc2_p_adj_method)
   methods <- da_validate_methods(methods)
-  unsupported <- setdiff(methods, "aldex2")
-  if (length(unsupported) > 0) {
+  if (length(methods) > 1) {
     stop(
-      "Only methods = \"aldex2\" is implemented in this version of ",
-      "microeda_da(). ANCOM-BC2 and DESeq2 are planned for later optional ",
-      "backends.",
+      "`microeda_da()` currently supports one method per call; ",
+      "public multi-method dispatch is not implemented yet.",
       call. = FALSE
     )
   }
-  pair_id <- da_validate_pair_id_argument(
-    pair_id = pair_id,
-    paired.test = paired.test
-  )
+  method <- methods[[1]]
+  if (identical(method, "deseq2")) {
+    stop(
+      "`methods = \"deseq2\"` is not implemented in this version of ",
+      "`microeda_da()`.",
+      call. = FALSE
+    )
+  }
+
+  if (identical(method, "aldex2")) {
+    if (ancombc2_adjustment_supplied) {
+      stop(
+        "`ancombc2_p_adj_method` can only be supplied when ",
+        "`methods = \"ancombc2\"`.",
+        call. = FALSE
+      )
+    }
+    pair_id <- da_validate_pair_id_argument(
+      pair_id = pair_id,
+      paired.test = paired.test
+    )
+  } else {
+    da_validate_ancombc2_public_arguments(
+      mc_samples_supplied = mc_samples_supplied,
+      denom_supplied = denom_supplied,
+      paired.test = paired.test,
+      pair_id = pair_id
+    )
+    pair_id <- NULL
+  }
 
   context <- da_prepare_context(
     x = x,
@@ -125,13 +171,32 @@ microeda_da <- function(x,
     taxa_are_rows = taxa_are_rows,
     pair_id = pair_id
   )
-  backend <- da_run_aldex2(
-    context,
-    mc.samples = mc.samples,
-    denom = denom,
-    paired.test = paired.test
+
+  if (identical(method, "aldex2")) {
+    backend <- da_run_aldex2(
+      context,
+      mc.samples = mc.samples,
+      denom = denom,
+      paired.test = paired.test
+    )
+    return(da_build_result_object(context, list(aldex2 = backend)))
+  }
+
+  if (nrow(context$contrast_plan) != 1 ||
+      !identical(context$contrast_plan$contrast_type, "explicit")) {
+    stop(
+      "ANCOM-BC2 currently supports exactly one explicit contrast; ",
+      "`contrast = \"pairwise\"` is not implemented.",
+      call. = FALSE
+    )
+  }
+
+  backend <- da_run_ancombc2(
+    context = context,
+    contrast_row = context$contrast_plan[1, , drop = FALSE],
+    params = list(p_adj_method = ancombc2_p_adj_method)
   )
-  da_build_result_object(context, list(aldex2 = backend))
+  da_build_result_object(context, list(ancombc2 = backend))
 }
 
 #' Extract standardized differential representation results
@@ -299,7 +364,29 @@ microeda_da_report <- function(x, top_n = 10, alpha = 0.05, digits = 3) {
     paste(
       "Backend-native/method-specific adjustment is used;",
       "microeda does not globally re-adjust backend outputs."
-    ),
+    )
+  )
+
+  if ("ancombc2" %in% x$methods) {
+    lines <- c(
+      lines,
+      paste(
+        "ANCOM-BC2 coefficients are natural-log estimates oriented as",
+        "group2 minus group1."
+      ),
+      paste(
+        "Native ANCOM-BC2 q-values are reported without additional",
+        "adjustment by microeda."
+      ),
+      paste(
+        "Interpret this as a method-specific exploratory/sensitivity view,",
+        "not a confirmed biological discovery."
+      )
+    )
+  }
+
+  lines <- c(
+    lines,
     "",
     "Per-contrast summary:"
   )
@@ -1575,7 +1662,10 @@ da_method_note <- function(method) {
       severity = "info",
       message = paste(
         "ANCOM-BC2 is treated as a compositional-aware method;",
-        "interpret results with its model and bias-correction assumptions."
+        "its native natural-log coefficient is oriented as group2 minus",
+        "group1 and retains ANCOM-BC2 bias correction.",
+        "Native q-values are not re-adjusted by microeda; interpret this",
+        "method-specific output as an exploratory/sensitivity view."
       )
     ))
   }

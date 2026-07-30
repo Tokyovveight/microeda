@@ -21,10 +21,10 @@ The core idea is deliberately conservative:
 
 PERMANOVA-style beta group testing is available when the optional `vegan`
 package is installed and is reported together with dispersion diagnostics.
-ALDEx2-based exploratory differential representation is available when the
-optional `ALDEx2` package is installed. Compositional/log-ratio methods,
-ANCOM-BC2 and DESeq2 backends, and formal method ranking are not implemented
-yet.
+ALDEx2- and ANCOM-BC2-based exploratory differential representation is
+available when the corresponding optional package is installed. ANCOM-BC2
+currently supports one explicit contrast. DESeq2, cross-method dispatch, and
+formal method ranking are not implemented yet.
 
 ## First Workflow
 
@@ -251,10 +251,10 @@ effective numbers of taxa.
 
 ## Differential Representation
 
-`microeda_da()` currently exposes an ALDEx2-backed exploratory differential
-representation workflow. It uses method-native p-value adjustment, returns
-standardized results with `as_da_results()`, and preserves raw ALDEx2 output in
-`da$raw_outputs`.
+`microeda_da()` exposes ALDEx2- and ANCOM-BC2-backed exploratory differential
+representation workflows. It uses method-native p-value adjustment, returns
+standardized results with `as_da_results()`, and preserves complete native
+backend output in `da$raw_outputs`.
 
 ```r
 if (requireNamespace("ALDEx2", quietly = TRUE)) {
@@ -276,7 +276,31 @@ if (requireNamespace("ALDEx2", quietly = TRUE)) {
 ```
 
 This workflow does not rank methods or claim ground-truth differentially
-abundant taxa. ANCOM-BC2 and DESeq2 are planned as later optional backends.
+abundant taxa. Public multi-method dispatch and DESeq2 are planned for later
+slices.
+
+ANCOM-BC2 is optional and can be installed with
+`BiocManager::install("ANCOMBC")`. Its current backend accepts one explicit
+contrast, does not filter or round counts, and reports the native natural-log
+coefficient as `group2 - group1`. Native q-values are not adjusted again.
+
+```r
+if (requireNamespace("ANCOMBC", quietly = TRUE)) {
+  da_ancombc2 <- microeda_da(
+    counts,
+    metadata = metadata,
+    taxonomy = taxonomy,
+    group = "group",
+    contrast = c("A", "B"),
+    methods = "ancombc2",
+    tax_rank = "Genus",
+    taxa_are_rows = FALSE,
+    ancombc2_p_adj_method = "holm"
+  )
+  as_da_summary(da_ancombc2)
+  cat(microeda_da_report(da_ancombc2, top_n = 5))
+}
+```
 
 For matched samples, identify pairs explicitly. microeda validates each
 contrast independently and never infers pairs from sample order. Native ALDEx2

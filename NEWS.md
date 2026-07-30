@@ -54,6 +54,8 @@
 * Stabilized paired ALDEx2 analyses with explicit `pair_id` matching,
   deterministic group2-minus-group1 effect orientation, and contrast-specific
   small-group caveats.
+* Added an optional ANCOM-BC2 backend for one explicit `microeda_da()` contrast,
+  with native natural-log coefficients, q-values, and complete raw output.
 * Added `microeda_beta()` for initial Bray-Curtis beta diversity distances.
 * Added `as_beta_dist()` to extract beta diversity distances from
   `microeda_beta` objects.
