@@ -167,6 +167,33 @@ results together with dispersion diagnostics and caveats.
 `microeda_beta_compare_test_report()` shows the same paired diagnostics
 side-by-side across beta distance methods without ranking methods.
 
+### Target Composition Before Taxonomy Filtering
+
+Use the optional target-composition diagnostic on data before removing
+non-target taxa:
+
+```r
+qc_target <- microeda_qc(
+  ps_before_filtering,
+  target_kingdom = "Fungi"
+)
+
+as_qc_target_composition(qc_target, "overall")
+as_qc_target_composition(qc_target, "kingdom")
+cat(microeda_qc_report(qc_target))
+
+microeda_qc_plot(
+  qc_target,
+  type = "target_composition",
+  target_view = "samples",
+  top_n = 20
+)
+```
+
+The diagnostic uses raw counts and reports target, known non-target, and
+unclassified kingdom assignments separately. It does not filter features or
+samples, and non-target signal is not automatic evidence of contamination.
+
 ## Machine-Readable Extractors
 
 The `as_*()` helpers return data frames, matrices, or `dist` objects for
@@ -175,6 +202,7 @@ downstream analysis and custom reporting.
 ```r
 as_qc_summary(qc)
 as_qc_issues(qc)
+as_qc_target_composition(qc_target, "sample")
 
 as_alpha_table(alpha)
 as_alpha_summary(alpha)

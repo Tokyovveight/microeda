@@ -10,7 +10,10 @@ microeda_qc(
   taxonomy = NULL,
   group = NULL,
   taxa_are_rows = TRUE,
-  min_prevalence = 0.05
+  min_prevalence = 0.05,
+  target_kingdom = NULL,
+  kingdom_rank = NULL,
+  target_match = c("normalized", "exact")
 )
 }
 \arguments{
@@ -32,6 +35,20 @@ object.}
 threshold are reported but flagged as \code{above_prevalence_threshold = FALSE}
 in the per-feature table. The per-sample \code{n_features_above_prevalence}
 count is restricted to features at or above the threshold.}
+
+\item{target_kingdom}{Optional non-empty character vector of target kingdom
+labels. When supplied, target, known non-target, and unclassified
+composition is summarized from raw counts without filtering features or
+samples.}
+
+\item{kingdom_rank}{Optional taxonomy column used for target matching.
+Matching is case-insensitive. When \code{NULL}, \code{Kingdom}, \code{Domain}, then
+\code{Superkingdom} are tried in that order.}
+
+\item{target_match}{Kingdom-label matching mode. \code{"normalized"} trims
+whitespace, compares case-insensitively, and removes only recognized
+leading rank prefixes. \code{"exact"} trims whitespace but otherwise preserves
+labels for matching.}
 }
 \value{
 A \code{microeda_qc} object with the following tidy data frames and
@@ -62,8 +79,10 @@ observations derived from the compact summaries and QC flags.}
 \item{\code{metadata_completeness}}{One row per metadata column with
 \code{column}, \code{missing_fraction}, \code{n_unique}, \code{is_constant}, \code{is_group}.
 \code{NULL} when no metadata is supplied.}
+\item{\code{target_composition}}{Target-versus-non-target composition tables,
+observations, and caveats. \code{NULL} when \code{target_kingdom = NULL}.}
 \item{\code{params}}{A named list of analysis parameters used to produce the
-QC object, including \code{min_prevalence} and \code{group}.}
+QC object, including prevalence and target-composition settings.}
 \item{\code{call}}{The matched function call.}
 }
 }
@@ -71,5 +90,12 @@ QC object, including \code{min_prevalence} and \code{group}.}
 \code{microeda_qc()} returns tidy per-sample, per-feature, per-rank, and
 metadata-completeness tables derived directly from the extracted count,
 metadata, and taxonomy data. It does not run the rule engine, so for
-diagnostics and recommendations use \code{\link[=microeda_check]{microeda_check()}}.
+diagnostics and recommendations use \code{\link[=microeda_check]{microeda_check()}}. When
+\code{target_kingdom} is supplied, it also describes target, known non-target,
+and unclassified taxonomy signal without removing any data. Known
+non-target signal is not automatically evidence of contamination.
+}
+\seealso{
+\code{\link[=as_qc_target_composition]{as_qc_target_composition()}}, \code{\link[=microeda_qc_report]{microeda_qc_report()}},
+\code{\link[=microeda_qc_plot]{microeda_qc_plot()}}
 }

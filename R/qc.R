@@ -3,13 +3,27 @@
 #' `microeda_qc()` returns tidy per-sample, per-feature, per-rank, and
 #' metadata-completeness tables derived directly from the extracted count,
 #' metadata, and taxonomy data. It does not run the rule engine, so for
-#' diagnostics and recommendations use [microeda_check()].
+#' diagnostics and recommendations use [microeda_check()]. When
+#' `target_kingdom` is supplied, it also describes target, known non-target,
+#' and unclassified taxonomy signal without removing any data. Known
+#' non-target signal is not automatically evidence of contamination.
 #'
 #' @inheritParams microeda_check
 #' @param min_prevalence Features with sample prevalence strictly below this
 #'   threshold are reported but flagged as `above_prevalence_threshold = FALSE`
 #'   in the per-feature table. The per-sample `n_features_above_prevalence`
 #'   count is restricted to features at or above the threshold.
+#' @param target_kingdom Optional non-empty character vector of target kingdom
+#'   labels. When supplied, target, known non-target, and unclassified
+#'   composition is summarized from raw counts without filtering features or
+#'   samples.
+#' @param kingdom_rank Optional taxonomy column used for target matching.
+#'   Matching is case-insensitive. When `NULL`, `Kingdom`, `Domain`, then
+#'   `Superkingdom` are tried in that order.
+#' @param target_match Kingdom-label matching mode. `"normalized"` trims
+#'   whitespace, compares case-insensitively, and removes only recognized
+#'   leading rank prefixes. `"exact"` trims whitespace but otherwise preserves
+#'   labels for matching.
 #'
 #' @return A `microeda_qc` object with the following tidy data frames and
 #'   compact summaries:
@@ -39,20 +53,35 @@
 #'     \item{`metadata_completeness`}{One row per metadata column with
 #'       `column`, `missing_fraction`, `n_unique`, `is_constant`, `is_group`.
 #'       `NULL` when no metadata is supplied.}
+#'     \item{`target_composition`}{Target-versus-non-target composition tables,
+#'       observations, and caveats. `NULL` when `target_kingdom = NULL`.}
 #'     \item{`params`}{A named list of analysis parameters used to produce the
-#'       QC object, including `min_prevalence` and `group`.}
+#'       QC object, including prevalence and target-composition settings.}
 #'     \item{`call`}{The matched function call.}
 #'   }
+#' @seealso [as_qc_target_composition()], [microeda_qc_report()],
+#'   [microeda_qc_plot()]
 #' @export
 microeda_qc <- function(x,
                         metadata = NULL,
                         taxonomy = NULL,
                         group = NULL,
                         taxa_are_rows = TRUE,
-                        min_prevalence = 0.05) {
+                        min_prevalence = 0.05,
+                        target_kingdom = NULL,
+                        kingdom_rank = NULL,
+                        target_match = c("normalized", "exact")) {
   if (!is.numeric(min_prevalence) || length(min_prevalence) != 1 ||
       is.na(min_prevalence) || min_prevalence < 0 || min_prevalence > 1) {
     stop("`min_prevalence` must be a single number in [0, 1].", call. = FALSE)
+  }
+
+  target_request <- .qc_validate_target_request(
+    target_kingdom,
+    target_match
+  )
+  if (!is.null(target_request$target_kingdom)) {
+    .qc_validate_original_taxonomy_ids(taxonomy)
   }
 
   extracted <- microeda_extract(x, metadata, taxonomy, taxa_are_rows)
@@ -68,6 +97,17 @@ microeda_qc <- function(x,
     n_samples = nrow(counts)
   )
   feature_dominance <- .qc_feature_dominance(counts)
+  target_composition <- if (is.null(target_request$target_kingdom)) {
+    NULL
+  } else {
+    .qc_target_composition(
+      counts = counts,
+      taxonomy = extracted$taxonomy,
+      target_kingdom = target_request$target_kingdom,
+      kingdom_rank = kingdom_rank,
+      target_match = target_request$target_match
+    )
+  }
   qc_flags <- .qc_flags(
     library_size_summary,
     sparsity_summary,
@@ -83,6 +123,13 @@ microeda_qc <- function(x,
     per_rank = per_rank,
     metadata_completeness = meta_complete
   )
+  if (!is.null(target_composition)) {
+    qc_observations <- rbind(
+      qc_observations,
+      target_composition$observations
+    )
+    rownames(qc_observations) <- NULL
+  }
 
   structure(
     list(
@@ -96,9 +143,17 @@ microeda_qc <- function(x,
       qc_observations = qc_observations,
       per_rank = per_rank,
       metadata_completeness = meta_complete,
+      target_composition = target_composition,
       params = list(
         min_prevalence = min_prevalence,
-        group = group
+        group = group,
+        target_kingdom = target_request$target_kingdom,
+        kingdom_rank = if (is.null(target_composition)) {
+          NULL
+        } else {
+          target_composition$kingdom_rank
+        },
+        target_match = target_request$target_match
       ),
       call = match.call()
     ),
@@ -260,13 +315,18 @@ as_qc_issues <- function(x) {
 #'
 #' `microeda_qc_report()` turns a `microeda_qc` object into a short
 #' newline-separated text report with compact summary counts and optional
-#' flag and observation detail lines.
+#' flag, observation, and target-composition detail lines. Target composition
+#' remains descriptive and does not identify confirmed contamination.
 #'
 #' @param x A `microeda_qc` object.
 #' @param include_flags Whether to include the `QC flags:` count and detail
 #'   lines.
 #' @param include_observations Whether to include the `QC observations:` count
 #'   and detail lines.
+#' @param include_target_composition Whether to include the target-composition
+#'   section when `x` contains that diagnostic.
+#' @param target_top_n Positive integer number of non-target kingdoms and
+#'   samples to show in target-composition report subsections.
 #'
 #' @return A single character string.
 #' @examples
@@ -284,7 +344,9 @@ as_qc_issues <- function(x) {
 #' @export
 microeda_qc_report <- function(x,
                                include_flags = TRUE,
-                               include_observations = TRUE) {
+                               include_observations = TRUE,
+                               include_target_composition = TRUE,
+                               target_top_n = 5) {
   if (!inherits(x, "microeda_qc")) {
     stop("`x` must be a microeda_qc object.", call. = FALSE)
   }
@@ -299,6 +361,15 @@ microeda_qc_report <- function(x,
       is.na(include_observations)) {
     stop("`include_observations` must be TRUE or FALSE.", call. = FALSE)
   }
+  if (!is.logical(include_target_composition) ||
+      length(include_target_composition) != 1 ||
+      is.na(include_target_composition)) {
+    stop(
+      "`include_target_composition` must be TRUE or FALSE.",
+      call. = FALSE
+    )
+  }
+  target_top_n <- .qc_validate_target_top_n(target_top_n)
 
   summary <- as_qc_summary(x, include_observations = FALSE)
 
@@ -335,15 +406,28 @@ microeda_qc_report <- function(x,
   }
 
   if (isTRUE(include_observations)) {
+    general_observations <- x$qc_observations[
+      x$qc_observations$category != "target_composition",
+      ,
+      drop = FALSE
+    ]
     lines <- c(
       lines,
       "",
-      paste0("QC observations: ", nrow(x$qc_observations)),
-      .qc_report_observation_lines(x$qc_observations)
+      paste0("QC observations: ", nrow(general_observations)),
+      .qc_report_observation_lines(general_observations)
     )
   }
 
-  paste(lines, collapse = "\n")
+  if (isTRUE(include_target_composition) &&
+      !is.null(x$target_composition)) {
+    lines <- c(
+      lines,
+      .qc_target_report_lines(x$target_composition, target_top_n)
+    )
+  }
+
+  paste(.qc_wrap_report_lines(lines), collapse = "\n")
 }
 
 .qc_report_flag_lines <- function(flags) {
@@ -439,6 +523,10 @@ microeda_qc_report <- function(x,
 #'   lines.
 #' @param include_observations Whether to include the `QC observations:` count
 #'   and detail lines.
+#' @param include_target_composition Whether to include the target-composition
+#'   section when available.
+#' @param target_top_n Positive integer number of non-target kingdoms and
+#'   samples to show in target-composition report subsections.
 #'
 #' @return The `file` path, invisibly.
 #' @examples
@@ -457,7 +545,9 @@ microeda_qc_report <- function(x,
 microeda_qc_write_report <- function(x,
                                      file,
                                      include_flags = TRUE,
-                                     include_observations = TRUE) {
+                                     include_observations = TRUE,
+                                     include_target_composition = TRUE,
+                                     target_top_n = 5) {
   if (!is.character(file) || length(file) != 1 || is.na(file) ||
       !nzchar(file)) {
     stop("`file` must be a single non-missing character string.", call. = FALSE)
@@ -466,7 +556,9 @@ microeda_qc_write_report <- function(x,
   report <- microeda_qc_report(
     x,
     include_flags = include_flags,
-    include_observations = include_observations
+    include_observations = include_observations,
+    include_target_composition = include_target_composition,
+    target_top_n = target_top_n
   )
 
   writeLines(report, con = file)
@@ -476,15 +568,23 @@ microeda_qc_write_report <- function(x,
 #' Plot compact QC diagnostics
 #'
 #' `microeda_qc_plot()` draws small base R QC plots from a `microeda_qc`
-#' object. The current skeleton supports library-size, per-sample sparsity,
-#' per-feature abundance, and per-feature prevalence barplots.
+#' object. It supports library-size, per-sample sparsity, per-feature
+#' abundance, per-feature prevalence, and target-composition barplots.
+#' Target-composition plotting only changes display aggregation; stored
+#' diagnostic tables are not modified.
 #'
 #' @param x A `microeda_qc` object.
 #' @param type Plot type. One of `"library_size"`, `"sparsity"`,
-#'   `"feature_abundance"`, or `"prevalence"`.
+#'   `"feature_abundance"`, `"prevalence"`, or `"target_composition"`.
 #' @param ... Additional arguments passed to [graphics::barplot()].
+#' @param target_view For `type = "target_composition"`, show stacked sample
+#'   proportions or kingdom-level read totals.
+#' @param top_n For `type = "target_composition"`, positive integer number of
+#'   samples or known kingdom labels to select before display aggregation.
 #'
-#' @return The value returned by [graphics::barplot()], invisibly.
+#' @return For existing plot types, the value returned by
+#'   [graphics::barplot()], invisibly. Target-composition plots invisibly
+#'   return the data frame used for plotting.
 #' @examples
 #' counts <- matrix(
 #'   c(10, 0, 0, 5, 20, 0, 1, 0),
@@ -500,7 +600,11 @@ microeda_qc_write_report <- function(x,
 #' microeda_qc_plot(qc, type = "feature_abundance")
 #' microeda_qc_plot(qc, type = "prevalence")
 #' @export
-microeda_qc_plot <- function(x, type = "library_size", ...) {
+microeda_qc_plot <- function(x,
+                             type = "library_size",
+                             ...,
+                             target_view = c("samples", "kingdoms"),
+                             top_n = 20) {
   if (!inherits(x, "microeda_qc")) {
     stop("`x` must be a microeda_qc object.", call. = FALSE)
   }
@@ -509,7 +613,8 @@ microeda_qc_plot <- function(x, type = "library_size", ...) {
     "library_size",
     "sparsity",
     "feature_abundance",
-    "prevalence"
+    "prevalence",
+    "target_composition"
   )
   if (!is.character(type) || length(type) != 1 || is.na(type) ||
       !type %in% supported_types) {
@@ -519,6 +624,15 @@ microeda_qc_plot <- function(x, type = "library_size", ...) {
       ".",
       call. = FALSE
     )
+  }
+
+  if (identical(type, "target_composition")) {
+    return(.qc_target_plot(
+      x = x,
+      target_view = target_view,
+      top_n = top_n,
+      dots = list(...)
+    ))
   }
 
   if (identical(type, "library_size")) {

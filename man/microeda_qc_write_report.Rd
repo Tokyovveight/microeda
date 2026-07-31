@@ -8,7 +8,9 @@ microeda_qc_write_report(
   x,
   file,
   include_flags = TRUE,
-  include_observations = TRUE
+  include_observations = TRUE,
+  include_target_composition = TRUE,
+  target_top_n = 5
 )
 }
 \arguments{
@@ -21,6 +23,12 @@ lines.}
 
 \item{include_observations}{Whether to include the \verb{QC observations:} count
 and detail lines.}
+
+\item{include_target_composition}{Whether to include the target-composition
+section when available.}
+
+\item{target_top_n}{Positive integer number of non-target kingdoms and
+samples to show in target-composition report subsections.}
 }
 \value{
 The \code{file} path, invisibly.

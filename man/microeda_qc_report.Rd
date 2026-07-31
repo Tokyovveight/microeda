@@ -4,7 +4,13 @@
 \alias{microeda_qc_report}
 \title{Build a compact text QC report}
 \usage{
-microeda_qc_report(x, include_flags = TRUE, include_observations = TRUE)
+microeda_qc_report(
+  x,
+  include_flags = TRUE,
+  include_observations = TRUE,
+  include_target_composition = TRUE,
+  target_top_n = 5
+)
 }
 \arguments{
 \item{x}{A \code{microeda_qc} object.}
@@ -14,6 +20,12 @@ lines.}
 
 \item{include_observations}{Whether to include the \verb{QC observations:} count
 and detail lines.}
+
+\item{include_target_composition}{Whether to include the target-composition
+section when \code{x} contains that diagnostic.}
+
+\item{target_top_n}{Positive integer number of non-target kingdoms and
+samples to show in target-composition report subsections.}
 }
 \value{
 A single character string.
@@ -21,7 +33,8 @@ A single character string.
 \description{
 \code{microeda_qc_report()} turns a \code{microeda_qc} object into a short
 newline-separated text report with compact summary counts and optional
-flag and observation detail lines.
+flag, observation, and target-composition detail lines. Target composition
+remains descriptive and does not identify confirmed contamination.
 }
 \examples{
 counts <- matrix(

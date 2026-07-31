@@ -525,6 +525,28 @@ print.microeda_qc <- function(x, ...) {
     cat("Metadata:         not provided\n")
   }
 
+  if (!is.null(x$target_composition)) {
+    target <- x$target_composition
+    cat(
+      "Target kingdom:   ",
+      paste(target$target_kingdom, collapse = ", "),
+      "\n",
+      sep = ""
+    )
+    cat(
+      "Target reads:     ",
+      .qc_format_target_percent(target$overall$target_read_proportion),
+      "\n",
+      sep = ""
+    )
+    cat(
+      "Non-target reads: ",
+      .qc_format_target_percent(target$overall$non_target_read_proportion),
+      "\n",
+      sep = ""
+    )
+  }
+
   if (nrow(x$qc_flags) > 0) {
     cat("\nQC flags:\n")
     for (i in seq_len(nrow(x$qc_flags))) {
@@ -545,6 +567,11 @@ print.microeda_qc <- function(x, ...) {
   )
 
   cat("\nUse microeda_qc_report(x) for a readable QC report.\n")
+  if (!is.null(x$target_composition)) {
+    cat(
+      "Use as_qc_target_composition(x, level) for target-composition tables.\n"
+    )
+  }
   cat(
     "Use x$per_sample, x$per_feature, x$library_size_summary, ",
     "x$sparsity_summary, x$prevalence_summary, x$feature_dominance, ",

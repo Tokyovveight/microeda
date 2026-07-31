@@ -4,23 +4,39 @@
 \alias{microeda_qc_plot}
 \title{Plot compact QC diagnostics}
 \usage{
-microeda_qc_plot(x, type = "library_size", ...)
+microeda_qc_plot(
+  x,
+  type = "library_size",
+  ...,
+  target_view = c("samples", "kingdoms"),
+  top_n = 20
+)
 }
 \arguments{
 \item{x}{A \code{microeda_qc} object.}
 
 \item{type}{Plot type. One of \code{"library_size"}, \code{"sparsity"},
-\code{"feature_abundance"}, or \code{"prevalence"}.}
+\code{"feature_abundance"}, \code{"prevalence"}, or \code{"target_composition"}.}
 
 \item{...}{Additional arguments passed to \code{\link[graphics:barplot]{graphics::barplot()}}.}
+
+\item{target_view}{For \code{type = "target_composition"}, show stacked sample
+proportions or kingdom-level read totals.}
+
+\item{top_n}{For \code{type = "target_composition"}, positive integer number of
+samples or known kingdom labels to select before display aggregation.}
 }
 \value{
-The value returned by \code{\link[graphics:barplot]{graphics::barplot()}}, invisibly.
+For existing plot types, the value returned by
+\code{\link[graphics:barplot]{graphics::barplot()}}, invisibly. Target-composition plots invisibly
+return the data frame used for plotting.
 }
 \description{
 \code{microeda_qc_plot()} draws small base R QC plots from a \code{microeda_qc}
-object. The current skeleton supports library-size, per-sample sparsity,
-per-feature abundance, and per-feature prevalence barplots.
+object. It supports library-size, per-sample sparsity, per-feature
+abundance, per-feature prevalence, and target-composition barplots.
+Target-composition plotting only changes display aggregation; stored
+diagnostic tables are not modified.
 }
 \examples{
 counts <- matrix(
